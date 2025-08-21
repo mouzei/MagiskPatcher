@@ -14,6 +14,8 @@ namespace MagiskPatcher
                 $"电脑面具修补boot工具 MagiskPatcher\r\n" +
                 $"by 酷安@某贼 xda@SYXZ\r\n" +
                 $"{Patcher.Version}\r\n" +
+                $"开源地址：\r\n" +
+                $"https://github.com/mouzei/MagiskPatcher\r\n" +
                 $"基础用法：\r\n" +
                 $"MagiskPatcher.exe 面具zip或apk路径 需要修补的boot文件路径\r\n" +
                 $"可选参数：\r\n" +

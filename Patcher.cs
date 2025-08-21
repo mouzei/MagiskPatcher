@@ -13,7 +13,7 @@ namespace MagiskPatcher
     public static class Patcher
     {
         //版本号
-        public static string Version = "2025.8.20-1";
+        public static string Version = "2025.8.21-1";
         //csv配置文件涉及的参数
         static string comment = "";
         static List<string> RequiredFiles = new List<string> { };
@@ -65,14 +65,20 @@ namespace MagiskPatcher
         {
             Info("Magisk patch : Start");
             //处理参数1
-            Info("Args parser 1 : Start");
+            Info("Args parser step 1 : Start");
             ArgsParser1();
-            Info("Args parser 1 : Done");
+            Info("Args parser step 1 : Done");
             //读取修补脚本md5，确定所需步骤
             Info("Load csv config : Start");
-            LoadCsvConf(CsvConfPath, CalcPatchShMd5());
-            Info($"Load csv config : Info :{comment}");
-            Info("Load csv config : Done");
+            if (LoadCsvConf(CsvConfPath, CalcPatchShMd5()))
+            {
+                Info($"Load csv config : Info :{comment}");
+                Info("Load csv config : Done");
+            }
+            else
+            {
+                Error("Load csv config : Error : This version of Magisk is currently not supported. Please feedback to developer");
+            }
             //准备Magisk组件
             Info("Prepare Magisk Files : Start");
             PrepareMagiskFiles(CpuArch, CpuBitSupport);
@@ -84,9 +90,9 @@ namespace MagiskPatcher
             Info($"magiskVerCode : {magiskVerCode}");
             Info("Read magisk version : Done");
             //处理参数2
-            Info("Args parser 2 : Start");
+            Info("Args parser step 2 : Start");
             ArgsParser2();
-            Info("Args parser 2 : Done");
+            Info("Args parser step 2 : Done");
             //设置标志
             KEEPVERITY = (bool)Flag_KEEPVERITY;
             KEEPFORCEENCRYPT = (bool)Flag_KEEPFORCEENCRYPT;
@@ -574,7 +580,7 @@ namespace MagiskPatcher
 
 
         //加载csv配置文件
-        static void LoadCsvConf(string filePath, string md5)
+        static bool LoadCsvConf(string filePath, string md5)
         {
             //读取整个filePath
             string csvText = File.ReadAllText(filePath);
@@ -603,6 +609,7 @@ namespace MagiskPatcher
             {
                 md5Line = line;
             }
+            if (string.IsNullOrEmpty(md5Line)) { return false; } //找不到目标MD5，不支持该版本
             //按,分割
             string[] values = md5Line.Split(',');
             //赋值
@@ -635,6 +642,7 @@ namespace MagiskPatcher
             PatchKernel_RemoveSamsungDefex = bool.Parse(values[optionDict["PatchKernel_RemoveSamsungDefex"]]);
             PatchKernel_DisableSamsungPROCA = bool.Parse(values[optionDict["PatchKernel_DisableSamsungPROCA"]]);
             RmKernelIfUnpatched = bool.Parse(values[optionDict["RmKernelIfUnpatched"]]);
+            return true;
         }
 
 
