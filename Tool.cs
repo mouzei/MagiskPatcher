@@ -1,0 +1,295 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using static MagiskPatcher.Program;
+
+namespace MagiskPatcher
+{
+    public static class Tool
+    {
+        public static string CmdOutput = "";
+
+
+        public static string GetStrFromText(string allText, string strInTargetLine, char delim, int token)
+        {
+            if (string.IsNullOrEmpty(allText))
+            {
+                Console.WriteLine("输入字符串不能为空");
+                return "";
+                //throw new ArgumentException("输入字符串不能为空");
+            }
+
+            // 查找包含"SHA1="的行
+            var targetLine = allText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None)
+                               .FirstOrDefault(line => line.Contains(strInTargetLine));
+
+            if (targetLine == null)
+            {
+                Console.WriteLine($"未找到包含'{strInTargetLine}'的行");
+                return "";
+                //throw new InvalidOperationException("未找到包含'SHA1='的行");
+            }
+
+            // 以'='为分隔符分割字符串
+            var segments = targetLine.Split(delim);
+
+            if (segments.Length < token)
+            {
+                Console.WriteLine($"分割后的段数不足{token}段，实际只有{segments.Length}段");
+                return "";
+                //throw new InvalidOperationException($"分割后的段数不足666段，实际只有{segments.Length}段");
+            }
+
+            return segments[token - 1]; // 数组是0-based索引，所以第666个元素索引是665
+        }
+
+
+        public static string GenerateRandomString(string characterPool, int length)
+        {
+            if (string.IsNullOrEmpty(characterPool))
+            {
+                throw new ArgumentException("字符池不能为空", nameof(characterPool));
+            }
+
+            if (length <= 0)
+            {
+                throw new ArgumentException("长度必须大于0", nameof(length));
+            }
+
+            // 使用加密安全的随机数生成器
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                // 将字符池转换为字符数组
+                var chars = characterPool.ToCharArray();
+
+                // 生成随机字节
+                var bytes = new byte[length];
+                rng.GetBytes(bytes);
+
+                // 将字节映射到字符池中的字符
+                var result = new char[length];
+                for (int i = 0; i < length; i++)
+                {
+                    // 使用模运算确保索引在字符池范围内
+                    result[i] = chars[bytes[i] % chars.Length];
+                }
+
+                return new string(result);
+            }
+        }
+
+
+        /// <summary>
+        /// 向指定文件写入文本
+        /// </summary>
+        /// <param name="filePath">文件路径</param>
+        /// <param name="text">要写入的内容</param>
+        /// <param name="append">true表示追加模式，false表示覆盖模式</param>
+        /// <param name="useCrLf">true表示使用CRLF换行符(\r\n)，false表示使用LF换行符(\n)</param>
+        /// <param name="encoding">编码格式，默认为UTF-8</param>
+        /// <returns>是否写入成功</returns>
+        public static bool WriteToFile(string filePath, string text, bool append, bool useCrLf = true, Encoding encoding = null)
+        {
+            try
+            {
+                // 如果编码未指定，使用UTF-8
+                encoding = encoding ?? new UTF8Encoding(false);
+
+                // 根据参数处理换行符
+                string processedContent = useCrLf
+                    ? text.Replace("\n", "\r\n")  // 确保所有换行都是CRLF
+                    : text.Replace("\r\n", "\n"); // 确保所有换行都是LF
+
+                // 如果是追加模式且文件已存在，则追加内容
+                if (append && File.Exists(filePath))
+                {
+                    File.AppendAllText(filePath, processedContent, encoding);
+                }
+                else
+                {
+                    // 覆盖模式或文件不存在，直接写入
+                    File.WriteAllText(filePath, processedContent, encoding);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // 在实际应用中，你可能想记录这个错误或抛出自定义异常
+                Console.WriteLine($"写入文件时出错: {ex.Message}");
+                return false;
+            }
+        }
+
+
+        /// <summary>
+        /// 从字符串中获取指定行号的内容
+        /// </summary>
+        /// <param name="input">输入字符串</param>
+        /// <param name="lineNumber">要获取的行号(从1开始)</param>
+        /// <returns>指定行的内容，如果行号无效则返回null</returns>
+        public static string GetLineFromString(string input, int lineNumber)
+        {
+            // 检查参数有效性
+            if (string.IsNullOrEmpty(input) || lineNumber < 1)
+            {
+                return null;
+            }
+
+            using (var reader = new StringReader(input))
+            {
+                string line;
+                int currentLine = 1;
+
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (currentLine == lineNumber)
+                    {
+                        return line;
+                    }
+                    currentLine++;
+                }
+            }
+
+            // 如果行号超出范围，返回null
+            return null;
+        }
+
+
+        /// <summary>
+        /// 移除字符串中的所有空行（包括仅包含空白字符的行）
+        /// </summary>
+        /// <param name="input">原始字符串</param>
+        /// <param name="preserveLineEndings">是否保留原始换行符风格（true则使用原始换行符，false则使用当前环境的换行符）</param>
+        /// <returns>移除空行后的字符串</returns>
+        public static string RemoveEmptyLines(this string input, bool preserveLineEndings = false)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return input;
+            }
+
+            // 分割字符串，考虑两种换行符
+            var lines = input.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+            // 过滤掉空行或仅包含空白字符的行
+            var nonEmptyLines = lines.Where(line => !string.IsNullOrWhiteSpace(line));
+
+            // 决定使用哪种换行符
+            string newLine = preserveLineEndings
+                ? input.Contains("\r\n") ? "\r\n" : "\n"
+                : Environment.NewLine;
+
+            // 重新组合非空行
+            return string.Join(newLine, nonEmptyLines);
+        }
+
+
+        public static int RunCommand(string workingDirectory, string filePath, string arguments, Dictionary<string, string> environmentVars = null)
+        {
+            string standardOutput;
+            string standardError;
+            if (workingDirectory == "" || workingDirectory == null)
+            {
+                workingDirectory = Environment.CurrentDirectory;
+            }
+
+            var outputBuilder = new StringBuilder();
+            var errorBuilder = new StringBuilder();
+
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = filePath,
+                    Arguments = arguments,
+                    WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }
+            };
+            if (environmentVars != null)
+            {
+                foreach (var pair in environmentVars)
+                {
+                    process.StartInfo.EnvironmentVariables[pair.Key] = pair.Value;
+                    //Console.WriteLine($"设置环境变量: {pair.Key} = {pair.Value}");
+                }
+            }
+
+            process.OutputDataReceived += (sender, args) =>
+            {
+                if (args.Data != null)
+                    outputBuilder.AppendLine(args.Data);
+            };
+
+            process.ErrorDataReceived += (sender, args) =>
+            {
+                if (args.Data != null)
+                    errorBuilder.AppendLine(args.Data);
+            };
+
+            try
+            {
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+
+                standardOutput = outputBuilder.ToString().TrimEnd();
+                standardError = errorBuilder.ToString().TrimEnd();
+
+                //Console.WriteLine($"Standard Output: \r\n{standardOutput}");
+                //Console.WriteLine($"Standard Error: \r\n{standardError}");
+                CmdOutput = standardOutput + "\r\n" + standardError;
+
+                return process.ExitCode;
+            }
+            finally
+            {
+                process.Close();
+            }
+        }
+
+        public static string CalculateFileMD5(string filePath)
+        {
+            try
+            {
+                // 创建MD5实例
+                using (var md5 = MD5.Create())
+                {
+                    // 打开文件流
+                    using (var stream = File.OpenRead(filePath))
+                    {
+                        // 计算哈希值
+                        byte[] hashBytes = md5.ComputeHash(stream);
+
+                        // 将字节数组转换为十六进制字符串
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < hashBytes.Length; i++)
+                        {
+                            sb.Append(hashBytes[i].ToString("x2"));
+                        }
+
+                        return sb.ToString();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"计算MD5时出错: {ex.Message}";
+            }
+        }
+
+
+
+
+
+    }
+}
