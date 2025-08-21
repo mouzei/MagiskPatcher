@@ -80,15 +80,15 @@ namespace MagiskPatcher
                 Error("Load csv config : Error : This version of Magisk is currently not supported. Please feedback to developer");
             }
             //准备Magisk组件
-            Info("Prepare Magisk Files : Start");
+            Info("Prepare Magisk files : Start");
             PrepareMagiskFiles(CpuArch, CpuBitSupport);
-            Info("Prepare Magisk Files : Done");
+            Info("Prepare Magisk files : Done");
             //读取面具版本号
-            Info("Read magisk version : Start");
+            Info("Read Magisk version : Start");
             ReadMagiskVersion();
             Info($"magiskVer : {magiskVer}");
             Info($"magiskVerCode : {magiskVerCode}");
-            Info("Read magisk version : Done");
+            Info("Read Magisk version : Done");
             //处理参数2
             Info("Args parser step 2 : Start");
             ArgsParser2();
@@ -114,7 +114,7 @@ namespace MagiskPatcher
             string INIT = "init";
             string SKIP_BACKUP = "";
             //检查必需文件
-            Info("Check Magisk Files : Start");
+            Info("Check Magisk files : Start");
             for (int i = RequiredFiles.Count - 1; i >= 0; i--)
             {
                 string fileName = RequiredFiles[i];
@@ -132,7 +132,7 @@ namespace MagiskPatcher
                     Error($"File not exist: {fileName}");
                 }
             }
-            Info("Check Magisk Files : Done");
+            Info("Check Magisk files : Done");
             //解包原boot
             Info("Unpack boot : Start");
             if (MagiskBoot($@"unpack -h {OrigFilePath}") == 0)
@@ -147,7 +147,7 @@ namespace MagiskPatcher
             if (RecoveryModeSupport && AutoSetRecoveryModeWhenRecoveryDtboFound && File.Exists($@"{WorkDir}\recovery_dtbo"))
             {
                 RECOVERYMODE = true;
-                Info($"Set RECOVERYMODE Flag : Done : {RECOVERYMODE}");
+                Info($"Set RECOVERYMODE flag : Done : {RECOVERYMODE}");
             }
             //检查ramdisk状态
             Info("Check ramdisk status : Start");
@@ -261,7 +261,7 @@ namespace MagiskPatcher
             {
                 TWOSTAGEINIT = true;
                 Environment.SetEnvironmentVariable("TWOSTAGEINIT", $"{TWOSTAGEINIT}");
-                Info($"Set TWOSTAGEINIT Flag : Done : {TWOSTAGEINIT}");
+                Info($"Set TWOSTAGEINIT flag : Done : {TWOSTAGEINIT}");
             }
             //索尼init.real支持
             INIT = "init";
@@ -405,7 +405,7 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 0092CFC2C9CDDDDA00 0092CFC2C9CEC0DB00") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully patched Vivo do_mount_check by wuxianlin");
+                        Info("Patch kernel - Info - Successfully patched vivo do_mount_check by wuxianlin");
                     }
                 }
                 //修补kernel-移除三星RKP
