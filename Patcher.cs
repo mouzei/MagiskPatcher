@@ -14,6 +14,8 @@ namespace MagiskPatcher
     {
         //版本号
         public static string Version = "2025.8.21-1";
+        //程序生成的（需要清理的）文件名
+        static List<string> FilesForCleanup = new List<string> { };
         //csv配置文件涉及的参数
         static string Comment = "";
         static List<string> RequiredFiles = new List<string> { };
@@ -64,39 +66,16 @@ namespace MagiskPatcher
         public static void Run()
         {
             Info("Magisk patch : Start");
-            //处理参数1
-            Info("Args parser step 1 : Start");
-            ArgsParser1();
-            Info("Args parser step 1 : Done");
-            //读取修补脚本md5，确定所需步骤
-            Info("Load csv config : Start");
-            if (LoadCsvConf(CsvConfPath, CalcPatchShMd5()))
-            {
-                Info($"Load csv config : Info :{Comment}");
-                Info("Load csv config : Done");
-            }
-            else
-            {
-                Error("Load csv config : Error : This version of Magisk is currently not supported. Please feedback to developer");
-            }
+            //处理参数和加载csv配置
+            Info("Parse args and load csv config : Start");
+            ArgsParser();
+            Info("Parse args and load csv config : Done");
             //清理工作目录
-            Info("Cleanup working directory : Start");
-            if (MagiskBoot($@"cleanup") != 0) { Error("Cleanup working directory : Error : Failed"); }
-            Info("Cleanup working directory : Done");
+            Cleanup();
             //准备Magisk组件
             Info("Prepare Magisk files : Start");
             PrepareMagiskFiles(CpuArch, CpuBitSupport);
             Info("Prepare Magisk files : Done");
-            //读取面具版本号
-            Info("Read Magisk version : Start");
-            ReadMagiskVersion();
-            Info($"magiskVer : {magiskVer}");
-            Info($"magiskVerCode : {magiskVerCode}");
-            Info("Read Magisk version : Done");
-            //处理参数2
-            Info("Args parser step 2 : Start");
-            ArgsParser2();
-            Info("Args parser step 2 : Done");
             //设置标志
             KEEPVERITY = (bool)Flag_KEEPVERITY;
             KEEPFORCEENCRYPT = (bool)Flag_KEEPFORCEENCRYPT;
@@ -197,6 +176,7 @@ namespace MagiskPatcher
                     {
                         Info("Get stock boot sha1 : Info : From config.orig");
                         SHA1 = Tool.GetStrFromText(File.ReadAllText($@"{WorkDir}\config.orig"), "SHA1=", '=', 2);
+                        FilesForCleanup.AddRange(new string[] { "config.orig" });
                     }
                 }
                 else
@@ -215,6 +195,7 @@ namespace MagiskPatcher
                 {
                     PREINITDEVICE = Tool.GetStrFromText(File.ReadAllText($@"{WorkDir}\config.orig"), "PREINITDEVICE=", '=', 2);
                     Info($"Read PREINITDEVICE from config.orig : Done : {PREINITDEVICE}");
+                    FilesForCleanup.AddRange(new string[] { "config.orig" });
                 }
             }
             //若STATUS=1，则还原ramdisk.cpio
@@ -235,6 +216,7 @@ namespace MagiskPatcher
             {
                 Info("Backup ramdisk : Start");
                 File.Copy($@"{WorkDir}\ramdisk.cpio", $@"{WorkDir}\ramdisk.cpio.orig", overwrite: true);
+                FilesForCleanup.AddRange(new string[] { "ramdisk.cpio.orig" });
                 Info("Backup ramdisk : Done");
             }
             //针对AonlySAR的ramdisk的特殊处理
@@ -279,6 +261,7 @@ namespace MagiskPatcher
             if (AddRandomSeedToConfig) { configText += $"RANDOMSEED=0x{Tool.GenerateRandomString("abcdef0123456789", 16)}\n"; }
             Console.WriteLine(configText);
             WriteToFile($@"{WorkDir}\config", configText, false, false, new UTF8Encoding(false));
+            FilesForCleanup.AddRange(new string[] { "config" });
             Info("Write config : Done");
             //删除ramdisk中的init.zygote*.rc
             if (RmInitZygoteRcInRamdisk)
@@ -483,29 +466,14 @@ namespace MagiskPatcher
                     $"set \"MagiskPatcher_MagiskVerCode={magiskVerCode}\"\r\n" +
                     $"set \"MagiskPatcher_OutputFilePath={NewFilePath}\"\r\n");
             }
+            //清理
+            if (CleanupAfterComplete == true) { Cleanup(); }
             Info("Magisk patch : Done");
         }
 
 
-        //参数处理2
-        static void ArgsParser2()
-        {
-            //新文件路径（对于自动默认的新文件名，此处仅初步命名，在打包boot步骤扩展为正式命名）
-            if (string.IsNullOrEmpty(NewFilePath))
-            {
-                NewFilePath = $@"{Path.GetDirectoryName(OrigFilePath)}\{Path.GetFileNameWithoutExtension(OrigFilePath)}_MagiskPatched_{magiskVer}_{magiskVerCode}_{DateTime.Now.ToString("yyyy.MM.dd_HH.mm.ss.fff")}{Path.GetExtension(OrigFilePath)}";
-            }
-            else
-            {
-                NewFilePath = Path.GetFullPath(NewFilePath);
-                if (!Directory.Exists(Path.GetDirectoryName(NewFilePath))) { Error($"Directory not found : {Path.GetDirectoryName(NewFilePath)}"); }
-            }
-            Info($"[NewFilePath]{NewFilePath}");
-        }
-
-
-        //参数处理1
-        static void ArgsParser1()
+        //参数处理
+        static void ArgsParser()
         {
             //面具zip路径【必需】
             if (!File.Exists(MagiskZipPath)) { Error($"File not found : {MagiskZipPath}"); }
@@ -594,6 +562,8 @@ namespace MagiskPatcher
             Info($"[Flag_PATCHVBMETAFLAG]{Flag_PATCHVBMETAFLAG}");
             Info($"[Flag_LEGACYSAR]{Flag_LEGACYSAR}");
             Info($"[Flag_PREINITDEVICE]{Flag_PREINITDEVICE}");
+            //结束后清理
+            if (CleanupAfterComplete == null) { CleanupAfterComplete = true; }
             //保存一些输出信息到bat
             if (string.IsNullOrEmpty(SaveSomeOutputInfoToBat))
             {
@@ -605,6 +575,42 @@ namespace MagiskPatcher
                 if (!Directory.Exists(Path.GetDirectoryName(SaveSomeOutputInfoToBat))) { Error($"Directory not found : {Path.GetDirectoryName(SaveSomeOutputInfoToBat)}"); }
             }
             Info($"[SaveSomeOutputInfoToBat]{SaveSomeOutputInfoToBat}");
+            //解压util_functions.sh和boot_patch.sh
+            if (File.Exists($@"{WorkDir}\boot_patch.sh")) { File.Delete($@"{WorkDir}\boot_patch.sh"); }
+            if (File.Exists($@"{WorkDir}\util_functions.sh")) { File.Delete($@"{WorkDir}\util_functions.sh"); }
+            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\util_functions.sh -ir!common\util_functions.sh -ir!assets\boot_patch.sh -ir!common\boot_patch.sh {MagiskZipPath}");
+            if (!File.Exists($@"{WorkDir}\boot_patch.sh")) { Error($"Failed to extract boot_patch.sh from {MagiskZipPath}"); }
+            if (!File.Exists($@"{WorkDir}\util_functions.sh")) { Error($"Failed to extract util_functions.sh from {MagiskZipPath}"); }
+            FilesForCleanup.AddRange(new string[] { "util_functions.sh", "boot_patch.sh" });
+            //读取修补脚本md5，确定所需步骤
+            Info("Load csv config : Start");
+            if (LoadCsvConf(CsvConfPath, CalculateFileMD5($@"{WorkDir}\boot_patch.sh")))
+            {
+                Info($"Load csv config : Info :{Comment}");
+                Info("Load csv config : Done");
+            }
+            else
+            {
+                Error("Load csv config : Error : This version of Magisk is currently not supported. Please feedback to developer");
+            }
+            //读取面具版本号
+            Info("Read Magisk version : Start");
+            magiskVer = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER=", '\'', 2);
+            magiskVerCode = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER_CODE=", '=', 2);
+            Info($"magiskVer : {magiskVer}");
+            Info($"magiskVerCode : {magiskVerCode}");
+            Info("Read Magisk version : Done");
+            //新文件路径（对于自动默认的新文件名，此处仅初步命名，在打包boot步骤扩展为正式命名）
+            if (string.IsNullOrEmpty(NewFilePath))
+            {
+                NewFilePath = $@"{Path.GetDirectoryName(OrigFilePath)}\{Path.GetFileNameWithoutExtension(OrigFilePath)}_MagiskPatched_{magiskVer}_{magiskVerCode}_{DateTime.Now.ToString("yyyy.MM.dd_HH.mm.ss.fff")}{Path.GetExtension(OrigFilePath)}";
+            }
+            else
+            {
+                NewFilePath = Path.GetFullPath(NewFilePath);
+                if (!Directory.Exists(Path.GetDirectoryName(NewFilePath))) { Error($"Directory not found : {Path.GetDirectoryName(NewFilePath)}"); }
+            }
+            Info($"[NewFilePath]{NewFilePath}");
         }
 
 
@@ -675,11 +681,15 @@ namespace MagiskPatcher
         }
 
 
-        //读取修补脚本md5
-        static string CalcPatchShMd5()
+        static void Cleanup()
         {
-            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\util_functions.sh -ir!common\util_functions.sh -ir!assets\boot_patch.sh -ir!common\boot_patch.sh {MagiskZipPath}");
-            return CalculateFileMD5($@"{WorkDir}\boot_patch.sh");
+            Info("Cleanup working directory : Start");
+            if (MagiskBoot($@"cleanup") != 0) { Error("Cleanup working directory : Error : Failed"); }
+            foreach (var fileName in FilesForCleanup)
+            {
+                if (File.Exists($@"{WorkDir}\{fileName}")) { File.Delete($@"{WorkDir}\{fileName}"); }
+            }
+            Info("Cleanup working directory : Done");
         }
 
 
@@ -734,7 +744,7 @@ namespace MagiskPatcher
             {
                 ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\riscv64\libmagiskinit.so     -ir!lib\riscv64\libmagisk.so                                                                                                -ir!lib\riscv64\libinit-ld.so     -ir!lib\riscv64\libbusybox.so     {MagiskZipPath}");
             }
-            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\stub.apk -ir!assets\util_functions.sh {MagiskZipPath}");
+            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\stub.apk -ir!assets\util_functions.sh -ir!common\util_functions.sh {MagiskZipPath}");
             if (File.Exists($@"{WorkDir}\magiskinit64"))
             {
                 if (File.Exists($@"{WorkDir}\magiskinit")) { File.Delete($@"{WorkDir}\magiskinit"); }
@@ -770,38 +780,14 @@ namespace MagiskPatcher
                 if (File.Exists($@"{WorkDir}\busybox")) { File.Delete($@"{WorkDir}\busybox"); }
                 File.Move($@"{WorkDir}\libbusybox.so", $@"{WorkDir}\busybox");
                 MagiskBoot($@"compress=xz busybox busybox.xz");
+                FilesForCleanup.AddRange(new string[] { "busybox", "libbusybox.so", "busybox.xz" });
             }
             if (File.Exists($@"{WorkDir}\util_functions.sh")) //Kitsune-27005-a497a13b-mod
             {
                 MagiskBoot($@"compress=xz util_functions.sh util_functions.xz");
+                FilesForCleanup.AddRange(new string[] { "util_functions.sh", "util_functions.xz" });
             }
-        }
-
-
-        //读取面具版本号
-        private static void ReadMagiskVersion()
-        {
-            if (File.Exists($@"{WorkDir}\util_functions.sh"))
-            {
-                try
-                {
-                    magiskVer = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER=", '\'', 2);
-                    magiskVerCode = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER_CODE=", '=', 2);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    magiskVer = "unknown";
-                    magiskVerCode = "unknown";
-                    return;
-                }
-            }
-            else
-            {
-                magiskVer = "unknown";
-                magiskVerCode = "unknown";
-                return;
-            }
+            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz" });
         }
 
 
