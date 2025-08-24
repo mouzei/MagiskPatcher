@@ -14,8 +14,6 @@ namespace MagiskPatcher
     {
         //版本号
         public static string Version = "2025.8.24-1";
-        //程序生成的（需要清理的）文件名
-        static List<string> FilesForCleanup = new List<string> { };
         //csv配置文件涉及的参数
         static string Comment = "";
         static List<string> RequiredFiles = new List<string> { };
@@ -60,8 +58,13 @@ namespace MagiskPatcher
         static string CpuArch = "";
         static Dictionary<string, bool> CpuBitSupport = new Dictionary<string, bool> { };
         //面具版本号
-        static string magiskVer = "unknown";
-        static string magiskVerCode = "unknown";
+        static string MagiskVer = "unknown";
+        static string MagiskVerCode = "unknown";
+        //程序生成的（需要清理的）文件名
+        static List<string> FilesForCleanup = new List<string> { };
+        //boot文件大小
+        static uint OrigFileSize;
+        static uint NewFileSize;
 
         public static void Run()
         {
@@ -454,17 +457,30 @@ namespace MagiskPatcher
                 Error("Repack boot : Error : Unable to repack boot image");
             }
             Info($"Repack boot : Done");
+            //检查boot大小
+            NewFileSize = (uint)new FileInfo(NewFilePath).Length;
+            Info($"[NewFileSize]{NewFileSize}");
+            if (!String.IsNullOrEmpty(ChkNewFileSize))
+            {
+                Info($"Check new file size : Start");
+                if (NewFileSize > uint.Parse(ChkNewFileSize)) { Error($"Check new file size : Error : The new file size {NewFileSize} exceeds the specified maximum {ChkNewFileSize}."); }
+                Info($"Check new file size : Done");
+            }
+            //打印完成信息
             PrintDone();
             Info($"New boot : {NewFilePath}");
             //保存一些输出信息到bat
             if (SaveSomeOutputInfoToBat != "")
             {
                 Info($"Save some output info to bat : {SaveSomeOutputInfoToBat}");
-                WriteToFile(SaveSomeOutputInfoToBat, $"set \"MagiskPatcher_MagiskVer={magiskVer}\"\r\n", false, true);
+                WriteToFile(SaveSomeOutputInfoToBat, $"set \"MagiskPatcher_MagiskVer={MagiskVer}\"\r\n", false, true);
                 File.WriteAllText(SaveSomeOutputInfoToBat, $"" +
-                    $"set \"MagiskPatcher_MagiskVer={magiskVer}\"\r\n" +
-                    $"set \"MagiskPatcher_MagiskVerCode={magiskVerCode}\"\r\n" +
-                    $"set \"MagiskPatcher_OutputFilePath={NewFilePath}\"\r\n");
+                    $"set \"MagiskPatcher_MagiskVer={MagiskVer}\"\r\n" +
+                    $"set \"MagiskPatcher_MagiskVerCode={MagiskVerCode}\"\r\n" +
+                    $"set \"MagiskPatcher_OrigFilePath={OrigFilePath}\"\r\n" +
+                    $"set \"MagiskPatcher_OrigFileSize={OrigFileSize}\"\r\n" +
+                    $"set \"MagiskPatcher_NewFilePath={NewFilePath}\"\r\n" +
+                    $"set \"MagiskPatcher_NewFileSize={NewFileSize}\"\r\n");
             }
             //清理
             if (CleanupAfterComplete == true) { Cleanup(); }
@@ -483,6 +499,9 @@ namespace MagiskPatcher
             if (!File.Exists(OrigFilePath)) { Error($"File not found : {OrigFilePath}"); }
             OrigFilePath = Path.GetFullPath(OrigFilePath);
             Info($"[OrigFilePath]{OrigFilePath}");
+            //原文件大小
+            OrigFileSize = (uint)new FileInfo(OrigFilePath).Length;
+            Info($"[OrigFileSize]{OrigFileSize}");
             //工作目录
             if (string.IsNullOrEmpty(WorkDir))
             {
@@ -512,6 +531,21 @@ namespace MagiskPatcher
             Info($"[CsvConfPath]{CsvConfPath}");
             //开机时安装完整MagiskAPP
             if (InstFullMagsikAPP == null) { InstFullMagsikAPP = false; }
+            Info($"[InstFullMagsikAPP]{InstFullMagsikAPP}");
+            //检查新文件大小
+            if (!String.IsNullOrEmpty(ChkNewFileSize))
+            {
+                if (ChkNewFileSize.ToLower() == "{origsize}") { ChkNewFileSize = OrigFileSize.ToString(); }
+                if (uint.TryParse(ChkNewFileSize, out uint result))
+                {
+                    ChkNewFileSize = result.ToString();
+                }
+                else
+                {
+                    Error($"Parameter {ChkNewFileSize} is not a uint.");
+                }
+            }
+            Info($"[ChkNewFileSize]{ChkNewFileSize}");
             //处理器
             if (string.IsNullOrEmpty(CpuType))
             {
@@ -566,6 +600,7 @@ namespace MagiskPatcher
             Info($"[Flag_PREINITDEVICE]{Flag_PREINITDEVICE}");
             //结束后清理
             if (CleanupAfterComplete == null) { CleanupAfterComplete = true; }
+            Info($"[CleanupAfterComplete]{CleanupAfterComplete}");
             //保存一些输出信息到bat
             if (string.IsNullOrEmpty(SaveSomeOutputInfoToBat))
             {
@@ -597,15 +632,15 @@ namespace MagiskPatcher
             }
             //读取面具版本号
             Info("Read Magisk version : Start");
-            magiskVer = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER=", '\'', 2);
-            magiskVerCode = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER_CODE=", '=', 2);
-            Info($"magiskVer : {magiskVer}");
-            Info($"magiskVerCode : {magiskVerCode}");
+            MagiskVer = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER=", '\'', 2);
+            MagiskVerCode = GetStrFromText(File.ReadAllText($@"{WorkDir}\util_functions.sh"), "MAGISK_VER_CODE=", '=', 2);
+            Info($"MagiskVer : {MagiskVer}");
+            Info($"MagiskVerCode : {MagiskVerCode}");
             Info("Read Magisk version : Done");
             //新文件路径（对于自动默认的新文件名，此处仅初步命名，在打包boot步骤扩展为正式命名）
             if (string.IsNullOrEmpty(NewFilePath))
             {
-                NewFilePath = $@"{Path.GetDirectoryName(OrigFilePath)}\{Path.GetFileNameWithoutExtension(OrigFilePath)}_MagiskPatched_{magiskVer}_{magiskVerCode}_{DateTime.Now.ToString("yyyy.MM.dd_HH.mm.ss.fff")}{Path.GetExtension(OrigFilePath)}";
+                NewFilePath = $@"{Path.GetDirectoryName(OrigFilePath)}\{Path.GetFileNameWithoutExtension(OrigFilePath)}_MagiskPatched_{MagiskVer}_{MagiskVerCode}_{DateTime.Now.ToString("yyyy.MM.dd_HH.mm.ss.fff")}{Path.GetExtension(OrigFilePath)}";
             }
             else
             {
@@ -683,6 +718,7 @@ namespace MagiskPatcher
         }
 
 
+        //清理
         static void Cleanup()
         {
             Info("Cleanup working directory : Start");
@@ -695,6 +731,7 @@ namespace MagiskPatcher
         }
 
 
+        //调用magiskboot
         static int MagiskBoot(string arguments)
         {
             //设置环境变量
@@ -713,6 +750,7 @@ namespace MagiskPatcher
         }
 
 
+        //调用7z
         static int ZipTool(string arguments)
         {
             int exitCode = RunCommand(WorkDir, ZipToolPath, arguments);
@@ -850,6 +888,7 @@ namespace MagiskPatcher
         }
 
 
+        //打印完成信息
         private static void PrintDone()
         {
             Console.WriteLine($@"");

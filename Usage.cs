@@ -25,6 +25,7 @@ namespace MagiskPatcher
                 $"-mb=指定magiskboot.exe路径，默认为当前目录\\magiskboot.exe\r\n" +
                 $"-cfg=指定配置文件路径，默认为当前目录\\MagiskPatcher.csv\r\n" +
                 $"-fa=开机时是否安装完整MagiskAPP（即集成完整APP到boot，要求分区空间足够），默认为false\r\n" +
+                "-cs=修补成功后检查新boot文件大小，大于设定值则报错。默认为空（不检查），可设为数字或{OrigSize}（原boot文件大小）\r\n" +
                 $"-cl=修补成功后是否自动清理工作目录，默认为true\r\n" +
                 $"-cpu=指定修补boot的目标处理器，可选项包括arm_64，arm_32，x86_64，x86_32，riscv_64，默认为arm_64\r\n" +
                 $"-kv=指定KEEPVERITY标记，默认为true\r\n" +

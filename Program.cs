@@ -19,6 +19,7 @@ namespace MagiskPatcher
         public static string MagiskbootPath;
         public static string CsvConfPath;
         public static bool? InstFullMagsikAPP;
+        public static string ChkNewFileSize;
         public static bool? CleanupAfterComplete;
         public static string SaveSomeOutputInfoToBat;
         //可选参数-修补选项
@@ -47,6 +48,7 @@ namespace MagiskPatcher
                     if (pair.Key == "args_mb") { MagiskbootPath = argsDictionary["args_mb"]; }
                     if (pair.Key == "args_cfg") { CsvConfPath = argsDictionary["args_cfg"]; }
                     if (pair.Key == "args_fa") { InstFullMagsikAPP = bool.Parse(argsDictionary["args_fa"]); }
+                    if (pair.Key == "args_cs") { ChkNewFileSize = argsDictionary["args_cs"]; }
                     if (pair.Key == "args_cl") { CleanupAfterComplete = bool.Parse(argsDictionary["args_cl"]); }
                     if (pair.Key == "args_si") { SaveSomeOutputInfoToBat = argsDictionary["args_si"]; }
                     if (pair.Key == "args_cpu") { CpuType = argsDictionary["args_cpu"]; }
