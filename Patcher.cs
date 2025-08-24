@@ -473,14 +473,14 @@ namespace MagiskPatcher
             if (SaveSomeOutputInfoToBat != "")
             {
                 Info($"Save some output info to bat : {SaveSomeOutputInfoToBat}");
-                WriteToFile(SaveSomeOutputInfoToBat, $"set \"MagiskPatcher_MagiskVer={MagiskVer}\"\r\n", false, true);
-                File.WriteAllText(SaveSomeOutputInfoToBat, $"" +
+                WriteToFile(SaveSomeOutputInfoToBat, $"" +
                     $"set \"MagiskPatcher_MagiskVer={MagiskVer}\"\r\n" +
                     $"set \"MagiskPatcher_MagiskVerCode={MagiskVerCode}\"\r\n" +
                     $"set \"MagiskPatcher_OrigFilePath={OrigFilePath}\"\r\n" +
                     $"set \"MagiskPatcher_OrigFileSize={OrigFileSize}\"\r\n" +
                     $"set \"MagiskPatcher_NewFilePath={NewFilePath}\"\r\n" +
-                    $"set \"MagiskPatcher_NewFileSize={NewFileSize}\"\r\n");
+                    $"set \"MagiskPatcher_NewFileSize={NewFileSize}\"\r\n"
+                    , false, true, Encoding.GetEncoding("GB2312"));
             }
             //清理
             if (CleanupAfterComplete == true) { Cleanup(); }
