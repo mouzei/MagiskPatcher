@@ -29,7 +29,7 @@ namespace MagiskPatcher
                 $"-kfe=指定KEEPFORCEENCRYPT标记，默认为true\r\n" +
                 $"-rm=指定RECOVERYMODE标记，默认为false\r\n" +
                 $"-pvf=指定PATCHVBMETAFLAG标记，默认为false\r\n" +
-                $"-ls=指定LEGACYSAR标记，默认为true\r\n" +
+                $"-ls=指定LEGACYSAR标记，默认为false\r\n" +
                 $"-pd=指定PREINITDEVICE标记，默认为空\r\n");
             Environment.Exit(1);
         }

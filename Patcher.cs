@@ -15,7 +15,7 @@ namespace MagiskPatcher
         //版本号
         public static string Version = "2025.8.21-1";
         //csv配置文件涉及的参数
-        static string comment = "";
+        static string Comment = "";
         static List<string> RequiredFiles = new List<string> { };
         static bool RecoveryModeSupport = false;
         static bool AutoSetRecoveryModeWhenRecoveryDtboFound = false;
@@ -72,13 +72,17 @@ namespace MagiskPatcher
             Info("Load csv config : Start");
             if (LoadCsvConf(CsvConfPath, CalcPatchShMd5()))
             {
-                Info($"Load csv config : Info :{comment}");
+                Info($"Load csv config : Info :{Comment}");
                 Info("Load csv config : Done");
             }
             else
             {
                 Error("Load csv config : Error : This version of Magisk is currently not supported. Please feedback to developer");
             }
+            //清理工作目录
+            Info("Cleanup working directory : Start");
+            if (MagiskBoot($@"cleanup") != 0) { Error("Cleanup working directory : Error : Failed"); }
+            Info("Cleanup working directory : Done");
             //准备Magisk组件
             Info("Prepare Magisk files : Start");
             PrepareMagiskFiles(CpuArch, CpuBitSupport);
@@ -100,7 +104,7 @@ namespace MagiskPatcher
             PATCHVBMETAFLAG = (bool)Flag_PATCHVBMETAFLAG;
             string PREINITDEVICE = "";
             if (SupportPreInitDevice) { PREINITDEVICE = Flag_PREINITDEVICE; }
-            bool LEGACYSAR = true;
+            bool LEGACYSAR = false;
             if (SupportLegacySarFlag) { LEGACYSAR = (bool)Flag_LEGACYSAR; }
             bool SYSTEM_ROOT = LEGACYSAR;
             bool TWOSTAGEINIT = false;
@@ -114,7 +118,7 @@ namespace MagiskPatcher
             string INIT = "init";
             string SKIP_BACKUP = "";
             //检查必需文件
-            Info("Check Magisk files : Start");
+            Info("Check files : Start");
             for (int i = RequiredFiles.Count - 1; i >= 0; i--)
             {
                 string fileName = RequiredFiles[i];
@@ -127,22 +131,15 @@ namespace MagiskPatcher
             }
             foreach (string fileName in RequiredFiles)
             {
-                if (!File.Exists($@"{WorkDir}\{fileName}"))
-                {
-                    Error($"File not exist: {fileName}");
-                }
+                if (!File.Exists($@"{WorkDir}\{fileName}")) { Error($"File not exist: {fileName}"); }
             }
-            Info("Check Magisk files : Done");
+            if (File.Exists(NewFilePath)) { File.Delete(NewFilePath); }
+            if (File.Exists(SaveSomeOutputInfoToBat)) { File.Delete(SaveSomeOutputInfoToBat); }
+            Info("Check files : Done");
             //解包原boot
             Info("Unpack boot : Start");
-            if (MagiskBoot($@"unpack -h {OrigFilePath}") == 0)
-            {
-                Info("Unpack boot : Done");
-            }
-            else
-            {
-                Error("Unpack boot : Error: Unsupported or unknown image format");
-            }
+            if (MagiskBoot($@"unpack -h {OrigFilePath}") != 0) { Error("Unpack boot : Error: Unsupported or unknown image format"); }
+            Info("Unpack boot : Done");
             //设置 RECOVERYMODE 标志
             if (RecoveryModeSupport && AutoSetRecoveryModeWhenRecoveryDtboFound && File.Exists($@"{WorkDir}\recovery_dtbo"))
             {
@@ -398,21 +395,21 @@ namespace MagiskPatcher
             if (File.Exists($@"{WorkDir}\kernel"))
             {
                 bool PATCHEDKERNEL = false;
-                Info("Patch kernel - Start");
+                Info("Patch kernel : Start");
                 //修补kernel-修补vivo do_mount_check
                 if (PatchKernel_PatchVivoDoMountCheck)
                 {
                     if (MagiskBoot($"hexpatch kernel 0092CFC2C9CDDDDA00 0092CFC2C9CEC0DB00") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully patched vivo do_mount_check by wuxianlin");
+                        Info("Patch kernel : Info : Successfully patched vivo do_mount_check by wuxianlin");
                     }
                 }
                 //修补kernel-移除三星RKP
                 if (MagiskBoot($"hexpatch kernel 49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054 A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054") == 0)
                 {
                     PATCHEDKERNEL = true;
-                    Info("Patch kernel - Info - Successfully removed Samsung RKP");
+                    Info("Patch kernel : Info : Successfully removed Samsung RKP");
                 }
                 //修补kernel-移除三星defex-A8_variant
                 if (PatchKernel_RemoveSamsungDefexA8Variant)
@@ -420,7 +417,7 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 006044B91F040071802F005460DE41F9 006044B91F00006B802F005460DE41F9") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully removed Samsung defex A8 variant");
+                        Info("Patch kernel : Info : Successfully removed Samsung defex A8 variant");
                     }
                 }
                 //修补kernel-移除三星defex-N9_variant
@@ -429,7 +426,7 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 603A46B91F0400710030005460C642F9 603A46B91F00006B0030005460C642F9") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully removed Samsung defex N9 variant");
+                        Info("Patch kernel : Info : Successfully removed Samsung defex N9 variant");
                     }
                 }
                 //修补kernel-移除三星defex
@@ -438,7 +435,7 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 821B8012 E2FF8F12") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully removed Samsung defex");
+                        Info("Patch kernel : Info : Successfully removed Samsung defex");
                     }
                 }
                 //修补kernel-禁用三星PROCA
@@ -447,7 +444,7 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 70726F63615F636F6E66696700 70726F63615F6D616769736B00") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully disable Samsung PROCA");
+                        Info("Patch kernel : Info : Successfully disable Samsung PROCA");
                     }
                 }
                 //修补kernel-强制开启rootfs
@@ -456,16 +453,16 @@ namespace MagiskPatcher
                     if (MagiskBoot($"hexpatch kernel 736B69705F696E697472616D667300 77616E745F696E697472616D667300") == 0)
                     {
                         PATCHEDKERNEL = true;
-                        Info("Patch kernel - Info - Successfully force kernel to load rootfs (for legacy SAR devices)");
+                        Info("Patch kernel : Info : Successfully force kernel to load rootfs (for legacy SAR devices)");
                     }
                 }
                 //If the kernel doesn't need to be patched at all, keep raw kernel to avoid bootloops on some weird devices
                 if (RmKernelIfUnpatched && !PATCHEDKERNEL)
                 {
-                    Info("Patch kernel - Info - Kernel is unpatched. Delete kernel");
+                    Info("Patch kernel : Info : Kernel is unpatched. Delete kernel");
                     File.Delete($@"{WorkDir}\kernel");
                 }
-                Info("Patch kernel - Done");
+                Info("Patch kernel : Done");
             }
             //打包boot
             Info($"Repack boot : Start");
@@ -476,6 +473,16 @@ namespace MagiskPatcher
             Info($"Repack boot : Done");
             PrintDone();
             Info($"New boot : {NewFilePath}");
+            //保存一些输出信息到bat
+            if (SaveSomeOutputInfoToBat != "")
+            {
+                Info($"Save some output info to bat : {SaveSomeOutputInfoToBat}");
+                WriteToFile(SaveSomeOutputInfoToBat, $"set \"MagiskPatcher_MagiskVer={magiskVer}\"\r\n", false, true);
+                File.WriteAllText(SaveSomeOutputInfoToBat, $"" +
+                    $"set \"MagiskPatcher_MagiskVer={magiskVer}\"\r\n" +
+                    $"set \"MagiskPatcher_MagiskVerCode={magiskVerCode}\"\r\n" +
+                    $"set \"MagiskPatcher_OutputFilePath={NewFilePath}\"\r\n");
+            }
             Info("Magisk patch : Done");
         }
 
@@ -484,13 +491,17 @@ namespace MagiskPatcher
         static void ArgsParser2()
         {
             //新文件路径（对于自动默认的新文件名，此处仅初步命名，在打包boot步骤扩展为正式命名）
-            if (string.IsNullOrEmpty(NewFilePath) || !Directory.Exists(Path.GetDirectoryName(NewFilePath)))
+            if (string.IsNullOrEmpty(NewFilePath))
             {
                 NewFilePath = $@"{Path.GetDirectoryName(OrigFilePath)}\{Path.GetFileNameWithoutExtension(OrigFilePath)}_MagiskPatched_{magiskVer}_{magiskVerCode}_{DateTime.Now.ToString("yyyy.MM.dd_HH.mm.ss.fff")}{Path.GetExtension(OrigFilePath)}";
             }
+            else
+            {
+                NewFilePath = Path.GetFullPath(NewFilePath);
+                if (!Directory.Exists(Path.GetDirectoryName(NewFilePath))) { Error($"Directory not found : {Path.GetDirectoryName(NewFilePath)}"); }
+            }
             Info($"[NewFilePath]{NewFilePath}");
         }
-
 
 
         //参数处理1
@@ -505,24 +516,31 @@ namespace MagiskPatcher
             OrigFilePath = Path.GetFullPath(OrigFilePath);
             Info($"[OrigFilePath]{OrigFilePath}");
             //工作目录
-            if (string.IsNullOrEmpty(WorkDir) || !Directory.Exists(WorkDir)) { WorkDir = Environment.CurrentDirectory; }
-            WorkDir = Path.GetFullPath(WorkDir);
-            if (WorkDir.EndsWith("\\")) { WorkDir = WorkDir.TrimEnd('\\'); }
+            if (string.IsNullOrEmpty(WorkDir))
+            {
+                WorkDir = Environment.CurrentDirectory;
+            }
+            else
+            {
+                WorkDir = Path.GetFullPath(WorkDir);
+                if (WorkDir.EndsWith("\\")) { WorkDir = WorkDir.TrimEnd('\\'); }
+                if (!Directory.Exists(WorkDir)) { Error($"Directory not found : {WorkDir}"); }
+            }
             Info($"[WorkDir]{WorkDir}");
             //7z路径
             if (string.IsNullOrEmpty(ZipToolPath)) { ZipToolPath = "7z.exe"; }
-            if (!File.Exists(ZipToolPath)) { Error($"File not found : {ZipToolPath}"); }
             ZipToolPath = Path.GetFullPath(ZipToolPath);
+            if (!File.Exists(ZipToolPath)) { Error($"File not found : {ZipToolPath}"); }
             Info($"[ZipToolPath]{ZipToolPath}");
             //magiskboot路径
             if (string.IsNullOrEmpty(MagiskbootPath)) { MagiskbootPath = "magiskboot.exe"; }
-            if (!File.Exists(MagiskbootPath)) { Error($"File not found : {MagiskbootPath}"); }
             MagiskbootPath = Path.GetFullPath(MagiskbootPath);
+            if (!File.Exists(MagiskbootPath)) { Error($"File not found : {MagiskbootPath}"); }
             Info($"[MagiskbootPath]{MagiskbootPath}");
             //CSV路径
             if (string.IsNullOrEmpty(CsvConfPath)) { CsvConfPath = "MagiskPatcher.csv"; }
-            if (!File.Exists(CsvConfPath)) { Error($"File not found : {CsvConfPath}"); }
             CsvConfPath = Path.GetFullPath(CsvConfPath);
+            if (!File.Exists(CsvConfPath)) { Error($"File not found : {CsvConfPath}"); }
             Info($"[CsvConfPath]{CsvConfPath}");
             //处理器
             if (string.IsNullOrEmpty(CpuType))
@@ -576,6 +594,17 @@ namespace MagiskPatcher
             Info($"[Flag_PATCHVBMETAFLAG]{Flag_PATCHVBMETAFLAG}");
             Info($"[Flag_LEGACYSAR]{Flag_LEGACYSAR}");
             Info($"[Flag_PREINITDEVICE]{Flag_PREINITDEVICE}");
+            //保存一些输出信息到bat
+            if (string.IsNullOrEmpty(SaveSomeOutputInfoToBat))
+            {
+                SaveSomeOutputInfoToBat = "";
+            }
+            else
+            {
+                SaveSomeOutputInfoToBat = Path.GetFullPath(SaveSomeOutputInfoToBat);
+                if (!Directory.Exists(Path.GetDirectoryName(SaveSomeOutputInfoToBat))) { Error($"Directory not found : {Path.GetDirectoryName(SaveSomeOutputInfoToBat)}"); }
+            }
+            Info($"[SaveSomeOutputInfoToBat]{SaveSomeOutputInfoToBat}");
         }
 
 
@@ -613,7 +642,7 @@ namespace MagiskPatcher
             //按,分割
             string[] values = md5Line.Split(',');
             //赋值
-            comment = values[optionDict["comment"]];
+            Comment = values[optionDict["comment"]];
             RequiredFiles = values[optionDict["RequiredFiles"]].Split(';').ToList();
             RecoveryModeSupport = bool.Parse(values[optionDict["RecoveryModeSupport"]]);
             AutoSetRecoveryModeWhenRecoveryDtboFound = bool.Parse(values[optionDict["AutoSetRecoveryModeWhenRecoveryDtboFound"]]);

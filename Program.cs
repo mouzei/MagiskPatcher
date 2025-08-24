@@ -26,6 +26,8 @@ namespace MagiskPatcher
         public static bool? Flag_PATCHVBMETAFLAG;
         public static bool? Flag_LEGACYSAR; //同SYSTEM_ROOT
         public static string Flag_PREINITDEVICE;
+        //可选参数-其他
+        public static string SaveSomeOutputInfoToBat;
 
         static void Main(string[] args)
         {
@@ -50,6 +52,7 @@ namespace MagiskPatcher
                     if (pair.Key == "args_pvf") { Flag_PATCHVBMETAFLAG = bool.Parse(argsDictionary["args_pvf"]); }
                     if (pair.Key == "args_ls")  { Flag_LEGACYSAR = bool.Parse(argsDictionary["args_ls"]); }
                     if (pair.Key == "args_pd")  { Flag_PREINITDEVICE = argsDictionary["args_pd"]; }
+                    if (pair.Key == "args_si") { SaveSomeOutputInfoToBat = argsDictionary["args_si"]; }
                 }
             }
             else
