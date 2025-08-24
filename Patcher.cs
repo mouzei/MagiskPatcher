@@ -13,7 +13,7 @@ namespace MagiskPatcher
     public static class Patcher
     {
         //版本号
-        public static string Version = "2025.8.21-1";
+        public static string Version = "2025.8.24-1";
         //程序生成的（需要清理的）文件名
         static List<string> FilesForCleanup = new List<string> { };
         //csv配置文件涉及的参数
@@ -510,6 +510,8 @@ namespace MagiskPatcher
             CsvConfPath = Path.GetFullPath(CsvConfPath);
             if (!File.Exists(CsvConfPath)) { Error($"File not found : {CsvConfPath}"); }
             Info($"[CsvConfPath]{CsvConfPath}");
+            //开机时安装完整MagiskAPP
+            if (InstFullMagsikAPP == null) { InstFullMagsikAPP = false; }
             //处理器
             if (string.IsNullOrEmpty(CpuType))
             {
@@ -767,27 +769,28 @@ namespace MagiskPatcher
             {
                 MagiskBoot($@"compress=xz libmagisk64.so magisk64.xz");
             }
-            if (File.Exists($@"{WorkDir}\stub.apk"))
+            if (RequiredFiles.Contains("stub.xz"))
             {
-                MagiskBoot($@"compress=xz stub.apk stub.xz");
+                if (InstFullMagsikAPP == true) { File.Copy(MagiskZipPath, $@"{WorkDir}\stub.apk", true); }
+                if (File.Exists($@"{WorkDir}\stub.apk")) { MagiskBoot($@"compress=xz stub.apk stub.xz"); }
             }
             if (File.Exists($@"{WorkDir}\libinit-ld.so"))
             {
                 MagiskBoot($@"compress=xz libinit-ld.so init-ld.xz");
             }
-            if (File.Exists($@"{WorkDir}\libbusybox.so")) //Kitsune-27005-a497a13b-mod
+            if (RequiredFiles.Contains("busybox.xz") && File.Exists($@"{WorkDir}\libbusybox.so")) //Kitsune-27005-a497a13b-mod
             {
                 if (File.Exists($@"{WorkDir}\busybox")) { File.Delete($@"{WorkDir}\busybox"); }
                 File.Move($@"{WorkDir}\libbusybox.so", $@"{WorkDir}\busybox");
                 MagiskBoot($@"compress=xz busybox busybox.xz");
-                FilesForCleanup.AddRange(new string[] { "busybox", "libbusybox.so", "busybox.xz" });
+                FilesForCleanup.AddRange(new string[] { "busybox", "busybox.xz" });
             }
-            if (File.Exists($@"{WorkDir}\util_functions.sh")) //Kitsune-27005-a497a13b-mod
+            if (RequiredFiles.Contains("util_functions.xz") && File.Exists($@"{WorkDir}\util_functions.sh")) //Kitsune-27005-a497a13b-mod
             {
                 MagiskBoot($@"compress=xz util_functions.sh util_functions.xz");
                 FilesForCleanup.AddRange(new string[] { "util_functions.sh", "util_functions.xz" });
             }
-            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz" });
+            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz", "libbusybox.so"});
         }
 
 
