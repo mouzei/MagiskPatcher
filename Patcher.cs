@@ -120,7 +120,7 @@ namespace MagiskPatcher
             Info("Check files : Done");
             //解包原boot
             Info("Unpack boot : Start");
-            if (MagiskBoot($@"unpack -h {OrigFilePath}") != 0) { Error("Unpack boot : Error: Unsupported or unknown image format"); }
+            if (MagiskBoot($"unpack -h \"{OrigFilePath}\"") != 0) { Error("Unpack boot : Error: Unsupported or unknown image format"); }
             Info("Unpack boot : Done");
             //设置 RECOVERYMODE 标志
             if (RecoveryModeSupport && AutoSetRecoveryModeWhenRecoveryDtboFound && File.Exists($@"{WorkDir}\recovery_dtbo"))
@@ -167,7 +167,7 @@ namespace MagiskPatcher
             if (STATUS == 0)
             {
                 Info("Get stock boot sha1 : Info : From stock boot");
-                MagiskBoot($@"sha1 {OrigFilePath}");
+                MagiskBoot($"sha1 \"{OrigFilePath}\"");
                 SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1);
             }
             if (STATUS == 1)
@@ -452,7 +452,7 @@ namespace MagiskPatcher
             }
             //打包boot
             Info($"Repack boot : Start");
-            if (MagiskBoot($"repack {OrigFilePath} {NewFilePath}") != 0)
+            if (MagiskBoot($"repack \"{OrigFilePath}\" \"{NewFilePath}\"") != 0)
             {
                 Error("Repack boot : Error : Unable to repack boot image");
             }
@@ -615,7 +615,7 @@ namespace MagiskPatcher
             //解压util_functions.sh和boot_patch.sh
             if (File.Exists($@"{WorkDir}\boot_patch.sh")) { File.Delete($@"{WorkDir}\boot_patch.sh"); }
             if (File.Exists($@"{WorkDir}\util_functions.sh")) { File.Delete($@"{WorkDir}\util_functions.sh"); }
-            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\util_functions.sh -ir!common\util_functions.sh -ir!assets\boot_patch.sh -ir!common\boot_patch.sh {MagiskZipPath}");
+            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\util_functions.sh -ir!common\util_functions.sh -ir!assets\boot_patch.sh -ir!common\boot_patch.sh " + $"\"{MagiskZipPath}\"");
             if (!File.Exists($@"{WorkDir}\boot_patch.sh")) { Error($"Failed to extract boot_patch.sh from {MagiskZipPath}"); }
             if (!File.Exists($@"{WorkDir}\util_functions.sh")) { Error($"Failed to extract util_functions.sh from {MagiskZipPath}"); }
             FilesForCleanup.AddRange(new string[] { "util_functions.sh", "boot_patch.sh" });
@@ -764,27 +764,27 @@ namespace MagiskPatcher
         {
             if (CpuArch == "arm" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so                                  -ir!lib\armeabi-v7a\libmagisk32.so -ir!lib\armeabi-v7a\libmagisk64.so -ir!arm\magiskinit                                     -ir!lib\armeabi-v7a\libbusybox.so {MagiskZipPath}");
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\arm64-v8a\libmagiskinit.so   -ir!lib\arm64-v8a\libmagisk.so                                      -ir!lib\arm64-v8a\libmagisk64.so   -ir!arm\magiskinit64 -ir!lib\arm64-v8a\libinit-ld.so   -ir!lib\arm64-v8a\libbusybox.so   {MagiskZipPath}");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so                                  -ir!lib\armeabi-v7a\libmagisk32.so -ir!lib\armeabi-v7a\libmagisk64.so -ir!arm\magiskinit                                     -ir!lib\armeabi-v7a\libbusybox.so " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\arm64-v8a\libmagiskinit.so   -ir!lib\arm64-v8a\libmagisk.so                                      -ir!lib\arm64-v8a\libmagisk64.so   -ir!arm\magiskinit64 -ir!lib\arm64-v8a\libinit-ld.so   -ir!lib\arm64-v8a\libbusybox.so   " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "arm" && CpuBitSupport["32"] && !CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so -ir!lib\armeabi-v7a\libmagisk.so -ir!lib\armeabi-v7a\libmagisk32.so                                    -ir!arm\magiskinit   -ir!lib\armeabi-v7a\libinit-ld.so -ir!lib\armeabi-v7a\libbusybox.so {MagiskZipPath}");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so -ir!lib\armeabi-v7a\libmagisk.so -ir!lib\armeabi-v7a\libmagisk32.so                                    -ir!arm\magiskinit   -ir!lib\armeabi-v7a\libinit-ld.so -ir!lib\armeabi-v7a\libbusybox.so " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "x86" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so                                          -ir!lib\x86\libmagisk32.so         -ir!lib\x86\libmagisk64.so         -ir!x86\magiskinit                                     -ir!lib\x86\libbusybox.so         {MagiskZipPath}");
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86_64\libmagiskinit.so      -ir!lib\x86_64\libmagisk.so                                         -ir!lib\x86_64\libmagisk64.so      -ir!x86\magiskinit64 -ir!lib\x86_64\libinit-ld.so      -ir!lib\x86_64\libbusybox.so      {MagiskZipPath}");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so                                          -ir!lib\x86\libmagisk32.so         -ir!lib\x86\libmagisk64.so         -ir!x86\magiskinit                                     -ir!lib\x86\libbusybox.so         " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86_64\libmagiskinit.so      -ir!lib\x86_64\libmagisk.so                                         -ir!lib\x86_64\libmagisk64.so      -ir!x86\magiskinit64 -ir!lib\x86_64\libinit-ld.so      -ir!lib\x86_64\libbusybox.so      " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "x86" && CpuBitSupport["32"] && !CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so         -ir!lib\x86\libmagisk.so         -ir!lib\x86\libmagisk32.so                                            -ir!x86\magiskinit   -ir!lib\x86\libinit-ld.so         -ir!lib\x86\libbusybox.so         {MagiskZipPath}");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so         -ir!lib\x86\libmagisk.so         -ir!lib\x86\libmagisk32.so                                            -ir!x86\magiskinit   -ir!lib\x86\libinit-ld.so         -ir!lib\x86\libbusybox.so         " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "riscv" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\riscv64\libmagiskinit.so     -ir!lib\riscv64\libmagisk.so                                                                                                -ir!lib\riscv64\libinit-ld.so     -ir!lib\riscv64\libbusybox.so     {MagiskZipPath}");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\riscv64\libmagiskinit.so     -ir!lib\riscv64\libmagisk.so                                                                                                -ir!lib\riscv64\libinit-ld.so     -ir!lib\riscv64\libbusybox.so     " + $"\"{MagiskZipPath}\"");
             }
-            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\stub.apk -ir!assets\util_functions.sh -ir!common\util_functions.sh {MagiskZipPath}");
+            ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\stub.apk -ir!assets\util_functions.sh -ir!common\util_functions.sh " + $"\"{MagiskZipPath}\"");
             if (File.Exists($@"{WorkDir}\magiskinit64"))
             {
                 if (File.Exists($@"{WorkDir}\magiskinit")) { File.Delete($@"{WorkDir}\magiskinit"); }
