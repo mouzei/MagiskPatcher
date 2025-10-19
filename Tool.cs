@@ -14,6 +14,71 @@ namespace MagiskPatcher
         public static string CmdOutput = "";
 
 
+
+
+
+
+
+
+
+        /// <summary>
+        /// 检查文件中是否存在指定的十六进制序列
+        /// </summary>
+        /// <param name="filePath">文件路径</param>
+        /// <param name="hexPattern">要查找的十六进制字符串（可以包含空格）</param>
+        /// <param name="caseSensitive">是否区分大小写</param>
+        /// <returns>是否存在匹配的序列</returns>
+        public static bool ContainsHexPattern(string filePath, string hexPattern, bool caseSensitive = false)
+        {
+            // 将十六进制字符串转换为字节数组
+            byte[] patternBytes = HexStringToByteArray(hexPattern);
+
+            // 读取文件并搜索
+            byte[] fileBytes = File.ReadAllBytes(filePath);
+
+            return ContainsByteSequence(fileBytes, patternBytes);
+        }
+        /// <summary>
+        /// 将十六进制字符串转换为字节数组
+        /// </summary>
+        private static byte[] HexStringToByteArray(string hex)
+        {
+            int length = hex.Length;
+            byte[] bytes = new byte[length / 2];
+
+            for (int i = 0; i < length; i += 2)
+            {
+                bytes[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
+            }
+
+            return bytes;
+        }
+        /// <summary>
+        /// 在字节数组中搜索指定的字节序列
+        /// </summary>
+        private static bool ContainsByteSequence(byte[] source, byte[] pattern)
+        {
+            if (pattern.Length == 0) return true;
+            if (source.Length < pattern.Length) return false;
+
+            for (int i = 0; i <= source.Length - pattern.Length; i++)
+            {
+                bool found = true;
+                for (int j = 0; j < pattern.Length; j++)
+                {
+                    if (source[i + j] != pattern[j])
+                    {
+                        found = false;
+                        break;
+                    }
+                }
+                if (found) return true;
+            }
+
+            return false;
+        }
+
+
         public static string GetStrFromText(string allText, string strInTargetLine, char delim, int token)
         {
             if (string.IsNullOrEmpty(allText))

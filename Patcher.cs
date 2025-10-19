@@ -13,7 +13,7 @@ namespace MagiskPatcher
     public static class Patcher
     {
         //版本号
-        public static string Version = "2025.10.19-1";
+        public static string Version = "2025.10.20-1";
         //csv配置文件涉及的参数
         static string Comment = "";
         static List<string> RequiredFiles = new List<string> { };
@@ -87,8 +87,8 @@ namespace MagiskPatcher
             PATCHVBMETAFLAG = (bool)Flag_PATCHVBMETAFLAG;
             string PREINITDEVICE = "";
             if (SupportPreInitDevice) { PREINITDEVICE = Flag_PREINITDEVICE; }
-            bool LEGACYSAR = false;
-            if (SupportLegacySarFlag) { LEGACYSAR = (bool)Flag_LEGACYSAR; }
+            bool LEGACYSAR;
+            if (SupportLegacySarFlag) { LEGACYSAR = (bool)Flag_LEGACYSAR; } else { LEGACYSAR = true; }
             bool SYSTEM_ROOT = LEGACYSAR;
             bool TWOSTAGEINIT = false;
             //bool CHROMEOS = false; //暂不支持
@@ -102,6 +102,7 @@ namespace MagiskPatcher
             string SKIP_BACKUP = "";
             string RAMDISK = "";
             bool VENDORBOOT = false;
+            string CompressRamdiskBackups = "";
             //检查必需文件
             Info("Check files : Start");
             for (int i = RequiredFiles.Count - 1; i >= 0; i--)
@@ -154,8 +155,8 @@ namespace MagiskPatcher
             if (File.Exists($@"{WorkDir}\ramdisk.cpio")) { RAMDISK = "ramdisk.cpio"; }
             if (SupportPatchVendorBoot)
             {
-                if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; }
-                if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; }
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; return; }
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; return; }
             }
             if (RAMDISK != "") { Info($"Find ramdisk : Done : {RAMDISK}"); } else { Info($"Find ramdisk : Done : No ramdisk found"); }
             //检查ramdisk状态
@@ -310,6 +311,28 @@ namespace MagiskPatcher
                     Info($"Delete init.zygote*.rc in ramdisk : Info : Failed");
                 }
             }
+            //确定修补ramdisk时是否压缩ramdisk\.backup内的部分文件（如init压缩为init.xz）
+            //4372656174652072616D6469736B206261636B7570732066726F6D204F524947 : Create ramdisk backups from ORIG
+            //4372656174652072616D6469736B206261636B7570732066726F6D204F5249472C2073706563696679205B2D6E5D20746F20736B697020636F6D7072657373696F6E : Create ramdisk backups from ORIG, specify [-n] to skip compression
+            Info($"Check if magiskboot compresses ramdisk backups : Start");
+            if (ContainsHexPattern($@"{WorkDir}\magiskboot", "4372656174652072616D6469736B206261636B7570732066726F6D204F524947"))
+            {
+                if (ContainsHexPattern($@"{WorkDir}\magiskboot", "4372656174652072616D6469736B206261636B7570732066726F6D204F5249472C2073706563696679205B2D6E5D20746F20736B697020636F6D7072657373696F6E"))
+                {
+                    CompressRamdiskBackups = ""; //压缩
+                    Info($"Check if magiskboot compresses ramdisk backups : Done : True. Compression enabled");
+                }
+                else
+                {
+                    CompressRamdiskBackups = "-n"; //不压缩
+                    Info($"Check if magiskboot compresses ramdisk backups : Done : False. Compression disabled");
+                }
+            }
+            else
+            {
+                CompressRamdiskBackups = ""; //压缩
+                Info($"Check if magiskboot compresses ramdisk backups : Done : Unknown. Compression enabled by default");
+            }
             //修补ramdisk(若ramdisk不存在则生成一个)
             Info($"Patch ramdisk : Start : Option {RamdiskPatchOption}");
             string SKIP_APK = "";
@@ -317,23 +340,23 @@ namespace MagiskPatcher
             string command = "";
             if (RamdiskPatchOption == "1")
             {
-                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\"                                                                                                                                                                                                                                                                                                                                                                                                             \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\"                                                                                                                                                                                                                                                                                                                                                                                                             \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig {CompressRamdiskBackups}\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "2")
             {
-                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig {CompressRamdiskBackups}\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "2-mod1")
             {
-                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                   \"add 0644 overlay.d/sbin/busybox.xz busybox.xz\" \"add 0644 overlay.d/sbin/util_functions.xz util_functions.xz\" \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                   \"add 0644 overlay.d/sbin/busybox.xz busybox.xz\" \"add 0644 overlay.d/sbin/util_functions.xz util_functions.xz\" \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig {CompressRamdiskBackups}\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "3")
             {
-                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig {CompressRamdiskBackups}\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "4")
             {
-                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\" \"add 0644 overlay.d/sbin/init-ld.xz init-ld.xz\"                                                                                                                   \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\" \"add 0644 overlay.d/sbin/init-ld.xz init-ld.xz\"                                                                                                                   \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig {CompressRamdiskBackups}\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else
             {
@@ -464,7 +487,7 @@ namespace MagiskPatcher
                         Info("Patch kernel : Info : Successfully disable Samsung PROCA");
                     }
                 }
-                //修补kernel-强制开启rootfs
+                //修补kernel-强制开启rootfs  skip_initramfs -> want_initramfs
                 if (LEGACYSAR)
                 {
                     if (MagiskBoot($"hexpatch kernel 736B69705F696E697472616D667300 77616E745F696E697472616D667300") == 0)
@@ -622,7 +645,7 @@ namespace MagiskPatcher
             if (Flag_KEEPFORCEENCRYPT == null) { Flag_KEEPFORCEENCRYPT = true; }
             if (Flag_RECOVERYMODE == null)     { Flag_RECOVERYMODE = false; }
             if (Flag_PATCHVBMETAFLAG == null)  { Flag_PATCHVBMETAFLAG = false; }
-            if (Flag_LEGACYSAR == null)        { Flag_LEGACYSAR = true; }
+            if (Flag_LEGACYSAR == null)        { Flag_LEGACYSAR = false; }
             Info($"[Flag_KEEPVERITY]{Flag_KEEPVERITY}");
             Info($"[Flag_KEEPFORCEENCRYPT]{Flag_KEEPFORCEENCRYPT}");
             Info($"[Flag_RECOVERYMODE]{Flag_RECOVERYMODE}");
@@ -795,25 +818,25 @@ namespace MagiskPatcher
         {
             if (CpuArch == "arm" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so                                  -ir!lib\armeabi-v7a\libmagisk32.so -ir!lib\armeabi-v7a\libmagisk64.so -ir!arm\magiskinit                                     -ir!lib\armeabi-v7a\libbusybox.so " + $"\"{MagiskZipPath}\"");
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\arm64-v8a\libmagiskinit.so   -ir!lib\arm64-v8a\libmagisk.so                                      -ir!lib\arm64-v8a\libmagisk64.so   -ir!arm\magiskinit64 -ir!lib\arm64-v8a\libinit-ld.so   -ir!lib\arm64-v8a\libbusybox.so   " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so                                  -ir!lib\armeabi-v7a\libmagisk32.so -ir!lib\armeabi-v7a\libmagisk64.so -ir!arm\magiskinit                                     -ir!lib\armeabi-v7a\libbusybox.so -ir!lib\armeabi-v7a\libmagiskboot.so -ir!arm\magiskboot " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\arm64-v8a\libmagiskinit.so   -ir!lib\arm64-v8a\libmagisk.so                                      -ir!lib\arm64-v8a\libmagisk64.so   -ir!arm\magiskinit64 -ir!lib\arm64-v8a\libinit-ld.so   -ir!lib\arm64-v8a\libbusybox.so   -ir!lib\arm64-v8a\libmagiskboot.so                      " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "arm" && CpuBitSupport["32"] && !CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so -ir!lib\armeabi-v7a\libmagisk.so -ir!lib\armeabi-v7a\libmagisk32.so                                    -ir!arm\magiskinit   -ir!lib\armeabi-v7a\libinit-ld.so -ir!lib\armeabi-v7a\libbusybox.so " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\armeabi-v7a\libmagiskinit.so -ir!lib\armeabi-v7a\libmagisk.so -ir!lib\armeabi-v7a\libmagisk32.so                                    -ir!arm\magiskinit   -ir!lib\armeabi-v7a\libinit-ld.so -ir!lib\armeabi-v7a\libbusybox.so -ir!lib\armeabi-v7a\libmagiskboot.so -ir!arm\magiskboot " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "x86" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so                                          -ir!lib\x86\libmagisk32.so         -ir!lib\x86\libmagisk64.so         -ir!x86\magiskinit                                     -ir!lib\x86\libbusybox.so         " + $"\"{MagiskZipPath}\"");
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86_64\libmagiskinit.so      -ir!lib\x86_64\libmagisk.so                                         -ir!lib\x86_64\libmagisk64.so      -ir!x86\magiskinit64 -ir!lib\x86_64\libinit-ld.so      -ir!lib\x86_64\libbusybox.so      " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so                                          -ir!lib\x86\libmagisk32.so         -ir!lib\x86\libmagisk64.so         -ir!x86\magiskinit                                     -ir!lib\x86\libbusybox.so         -ir!lib\x86\libmagiskboot.so         -ir!x86\magiskboot " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86_64\libmagiskinit.so      -ir!lib\x86_64\libmagisk.so                                         -ir!lib\x86_64\libmagisk64.so      -ir!x86\magiskinit64 -ir!lib\x86_64\libinit-ld.so      -ir!lib\x86_64\libbusybox.so      -ir!lib\x86_64\libmagiskboot.so                         " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "x86" && CpuBitSupport["32"] && !CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so         -ir!lib\x86\libmagisk.so         -ir!lib\x86\libmagisk32.so                                            -ir!x86\magiskinit   -ir!lib\x86\libinit-ld.so         -ir!lib\x86\libbusybox.so         " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\x86\libmagiskinit.so         -ir!lib\x86\libmagisk.so         -ir!lib\x86\libmagisk32.so                                            -ir!x86\magiskinit   -ir!lib\x86\libinit-ld.so         -ir!lib\x86\libbusybox.so         -ir!lib\x86\libmagiskboot.so         -ir!x86\magiskboot " + $"\"{MagiskZipPath}\"");
             }
             if (CpuArch == "riscv" && CpuBitSupport["64"])
             {
-                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\riscv64\libmagiskinit.so     -ir!lib\riscv64\libmagisk.so                                                                                                -ir!lib\riscv64\libinit-ld.so     -ir!lib\riscv64\libbusybox.so     " + $"\"{MagiskZipPath}\"");
+                ZipTool($@"e -aoa -o.\ -slp -y -ir!lib\riscv64\libmagiskinit.so     -ir!lib\riscv64\libmagisk.so                                                                                                -ir!lib\riscv64\libinit-ld.so     -ir!lib\riscv64\libbusybox.so     -ir!lib\riscv64\libmagiskboot.so                        " + $"\"{MagiskZipPath}\"");
             }
             ZipTool($@"e -aoa -o.\ -slp -y -ir!assets\stub.apk -ir!assets\util_functions.sh -ir!common\util_functions.sh " + $"\"{MagiskZipPath}\"");
             if (File.Exists($@"{WorkDir}\magiskinit64"))
@@ -825,6 +848,11 @@ namespace MagiskPatcher
             {
                 if (File.Exists($@"{WorkDir}\magiskinit")) { File.Delete($@"{WorkDir}\magiskinit"); }
                 File.Move($@"{WorkDir}\libmagiskinit.so", $@"{WorkDir}\magiskinit");
+            }
+            if (File.Exists($@"{WorkDir}\libmagiskboot.so"))
+            {
+                if (File.Exists($@"{WorkDir}\magiskboot")) { File.Delete($@"{WorkDir}\magiskboot"); }
+                File.Move($@"{WorkDir}\libmagiskboot.so", $@"{WorkDir}\magiskboot");
             }
             if (File.Exists($@"{WorkDir}\libmagisk.so"))
             {
@@ -859,7 +887,7 @@ namespace MagiskPatcher
                 MagiskBoot($@"compress=xz util_functions.sh util_functions.xz");
                 FilesForCleanup.AddRange(new string[] { "util_functions.sh", "util_functions.xz" });
             }
-            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz", "libbusybox.so"});
+            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz", "libbusybox.so", "libmagiskboot.so", "magiskboot"});
         }
 
 
