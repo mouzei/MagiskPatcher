@@ -13,7 +13,7 @@ namespace MagiskPatcher
     public static class Patcher
     {
         //版本号
-        public static string Version = "2025.8.24-1";
+        public static string Version = "2025.10.19-1";
         //csv配置文件涉及的参数
         static string Comment = "";
         static List<string> RequiredFiles = new List<string> { };
@@ -23,6 +23,7 @@ namespace MagiskPatcher
         static bool SupportPatchVbmetaFlag = false;
         static bool SupportPreInitDevice = false;
         static bool SupportLegacySarFlag = false;
+        static bool SupportPatchVendorBoot = false;
 
         static bool CheckRamdiskStatus_AllowMissingRamdisk = false;
         static bool AonlySARRamdiskSpecialHandling = false;
@@ -99,6 +100,8 @@ namespace MagiskPatcher
             if (EnableSkip32FlagForOption2 && CpuBitSupport["32"] == false) { SKIP32 = "#"; }
             string INIT = "init";
             string SKIP_BACKUP = "";
+            string RAMDISK = "";
+            bool VENDORBOOT = false;
             //检查必需文件
             Info("Check files : Start");
             for (int i = RequiredFiles.Count - 1; i >= 0; i--)
@@ -120,7 +123,25 @@ namespace MagiskPatcher
             Info("Check files : Done");
             //解包原boot
             Info("Unpack boot : Start");
-            if (MagiskBoot($"unpack -h \"{OrigFilePath}\"") != 0) { Error("Unpack boot : Error: Unsupported or unknown image format"); }
+            int unpackReturnCode = MagiskBoot($"unpack -h \"{OrigFilePath}\"");
+            if (unpackReturnCode == 0)
+            {
+                Info("Unpack boot : Info : Normal boot image detected");
+            }
+            else if (unpackReturnCode == 2)
+            {
+                Info("Unpack boot : Info : ChromeOS boot image detected");
+                Error("Unpack boot : Error : ChromeOS is currently not supported");
+            }
+            else if (SupportPatchVendorBoot && unpackReturnCode == 3)
+            {
+                Info("Unpack boot : Info : Vendor boot image detected");
+                VENDORBOOT = true;
+            }
+            else
+            {
+                Error("Unpack boot : Error: Unable to unpack boot image");
+            }
             Info("Unpack boot : Done");
             //设置 RECOVERYMODE 标志
             if (RecoveryModeSupport && AutoSetRecoveryModeWhenRecoveryDtboFound && File.Exists($@"{WorkDir}\recovery_dtbo"))
@@ -128,25 +149,34 @@ namespace MagiskPatcher
                 RECOVERYMODE = true;
                 Info($"Set RECOVERYMODE flag : Done : {RECOVERYMODE}");
             }
+            //查找ramdisk
+            Info("Find ramdisk : Start");
+            if (File.Exists($@"{WorkDir}\ramdisk.cpio")) { RAMDISK = "ramdisk.cpio"; }
+            if (SupportPatchVendorBoot)
+            {
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; }
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; }
+            }
+            if (RAMDISK != "") { Info($"Find ramdisk : Done : {RAMDISK}"); } else { Info($"Find ramdisk : Done : No ramdisk found"); }
             //检查ramdisk状态
             Info("Check ramdisk status : Start");
-            if (File.Exists($@"{WorkDir}\ramdisk.cpio"))
+            if (RAMDISK != "") //ramdisk存在
             {
-                Info("Check ramdisk status : Info : Ramdisk exists");
-                STATUS = MagiskBoot($@"cpio ramdisk.cpio test");
+                STATUS = MagiskBoot($@"cpio {RAMDISK} test");
                 SKIP_BACKUP = "";
             }
-            else
+            else //ramdisk不存在
             {
                 if (CheckRamdiskStatus_AllowMissingRamdisk)
                 {
-                    Info("Check ramdisk status : Info : Ramdisk not exist. Stock A only legacy SAR, or some Android 13 GKIs");
+                    Info("Check ramdisk status : Info : No ramdisk found, will create one from scratch. Could be stock A only legacy SAR, or some Android 13 GKIs");
+                    RAMDISK = "ramdisk.cpio";
                     STATUS = 0;
                     SKIP_BACKUP = "#";
                 }
                 else
                 {
-                    Error("Check ramdisk status : Error : Ramdisk not exist");
+                    Error("Check ramdisk status : Error : No ramdisk found");
                 }
             }
             if (STATUS == 0)
@@ -184,8 +214,8 @@ namespace MagiskPatcher
                 }
                 else
                 {
-                    Info("Get stock boot sha1 : Info : From ramdisk.cpio");
-                    MagiskBoot($@"cpio ramdisk.cpio sha1");
+                    Info($"Get stock boot sha1 : Info : From {RAMDISK}");
+                    MagiskBoot($@"cpio {RAMDISK} sha1");
                     SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1);
                 }
             }
@@ -201,11 +231,11 @@ namespace MagiskPatcher
                     FilesForCleanup.AddRange(new string[] { "config.orig" });
                 }
             }
-            //若STATUS=1，则还原ramdisk.cpio
+            //若STATUS=1，则还原ramdisk
             if (STATUS == 1)
             {
                 Info("Restore ramdisk : Start");
-                if (MagiskBoot($@"cpio ramdisk.cpio restore") == 0)
+                if (MagiskBoot($@"cpio {RAMDISK} restore") == 0)
                 {
                     Info("Restore ramdisk : Done");
                 }
@@ -214,11 +244,11 @@ namespace MagiskPatcher
                     Error("Restore ramdisk : Error : Failed");
                 }
             }
-            //备份ramdisk.cpio
-            if (File.Exists($@"{WorkDir}\ramdisk.cpio"))
+            //备份ramdisk
+            if (File.Exists($@"{WorkDir}\{RAMDISK}"))
             {
                 Info("Backup ramdisk : Start");
-                File.Copy($@"{WorkDir}\ramdisk.cpio", $@"{WorkDir}\ramdisk.cpio.orig", overwrite: true);
+                File.Copy($@"{WorkDir}\{RAMDISK}", $@"{WorkDir}\ramdisk.cpio.orig", overwrite: true);
                 FilesForCleanup.AddRange(new string[] { "ramdisk.cpio.orig" });
                 Info("Backup ramdisk : Done");
             }
@@ -226,14 +256,14 @@ namespace MagiskPatcher
             if (AonlySARRamdiskSpecialHandling && STATUS == 1)
             {
                 Info("Aonly SAR ramdisk special handling : Start");
-                if (MagiskBoot($"cpio ramdisk.cpio \"exists init.rc\"") == 0)
+                if (MagiskBoot($"cpio {RAMDISK} \"exists init.rc\"") == 0)
                 {
                     Info("Aonly SAR ramdisk special handling : Info : Normal boot image");
                 }
                 else
                 {
-                    Info("Aonly SAR ramdisk special handling : Info : A only system-as-root. Delete ramdisk.cpio and ramdisk.cpio.orig");
-                    File.Delete($@"{WorkDir}\ramdisk.cpio");
+                    Info($"Aonly SAR ramdisk special handling : Info : A only system-as-root. Delete {RAMDISK} and ramdisk.cpio.orig");
+                    File.Delete($@"{WorkDir}\{RAMDISK}");
                     File.Delete($@"{WorkDir}\ramdisk.cpio.orig");
                 }
                 Info("Aonly SAR ramdisk special handling : Done");
@@ -259,6 +289,7 @@ namespace MagiskPatcher
             configText += $"KEEPFORCEENCRYPT={KEEPFORCEENCRYPT.ToString().ToLower()}\n";
             if (SupportPatchVbmetaFlag && AddPatchVbmetaFlagToConfig) { configText += $"PATCHVBMETAFLAG={PATCHVBMETAFLAG.ToString().ToLower()}\n"; }
             if (RecoveryModeSupport) { configText += $"RECOVERYMODE={RECOVERYMODE.ToString().ToLower()}\n"; }
+            if (SupportPatchVendorBoot) { configText += $"VENDORBOOT={VENDORBOOT.ToString().ToLower()}\n"; }
             if (SupportPreInitDevice && PREINITDEVICE != "" && PREINITDEVICE != null) { configText += $"PREINITDEVICE={PREINITDEVICE.ToString()}\n"; }
             if (SHA1 != "" && SHA1 != null) { configText += $"SHA1={SHA1.ToString().ToLower()}\n"; }
             if (AddRandomSeedToConfig) { configText += $"RANDOMSEED=0x{Tool.GenerateRandomString("abcdef0123456789", 16)}\n"; }
@@ -267,10 +298,10 @@ namespace MagiskPatcher
             FilesForCleanup.AddRange(new string[] { "config" });
             Info("Write config : Done");
             //删除ramdisk中的init.zygote*.rc
-            if (RmInitZygoteRcInRamdisk)
+            if (RmInitZygoteRcInRamdisk && File.Exists($@"{WorkDir}\{RAMDISK}"))
             {
                 Info($"Delete init.zygote*.rc in ramdisk : Start");
-                if (MagiskBoot($"cpio ramdisk.cpio \"rm init.zygote32.rc\" \"rm init.zygote64_32.rc\"") == 0)
+                if (MagiskBoot($"cpio {RAMDISK} \"rm init.zygote32.rc\" \"rm init.zygote64_32.rc\"") == 0)
                 {
                     Info($"Delete init.zygote*.rc in ramdisk : Done");
                 }
@@ -279,30 +310,30 @@ namespace MagiskPatcher
                     Info($"Delete init.zygote*.rc in ramdisk : Info : Failed");
                 }
             }
-            //修补ramdisk
+            //修补ramdisk(若ramdisk不存在则生成一个)
             Info($"Patch ramdisk : Start : Option {RamdiskPatchOption}");
             string SKIP_APK = "";
             if (!File.Exists($@"{WorkDir}\stub.xz")) { SKIP_APK = "#"; }
             string command = "";
             if (RamdiskPatchOption == "1")
             {
-                command = $"cpio ramdisk.cpio \"add 0750 {INIT} magiskinit\"                                                                                                                                                                                                                                                                                                                                                                                                             \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\"                                                                                                                                                                                                                                                                                                                                                                                                             \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "2")
             {
-                command = $"cpio ramdisk.cpio \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "2-mod1")
             {
-                command = $"cpio ramdisk.cpio \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                   \"add 0644 overlay.d/sbin/busybox.xz busybox.xz\" \"add 0644 overlay.d/sbin/util_functions.xz util_functions.xz\" \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"{SKIP32} add 0644 overlay.d/sbin/magisk32.xz magisk32.xz\" \"{SKIP64} add 0644 overlay.d/sbin/magisk64.xz magisk64.xz\" \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                   \"add 0644 overlay.d/sbin/busybox.xz busybox.xz\" \"add 0644 overlay.d/sbin/util_functions.xz util_functions.xz\" \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "3")
             {
-                command = $"cpio ramdisk.cpio \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\"                                                                                                                                                                     \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else if (RamdiskPatchOption == "4")
             {
-                command = $"cpio ramdisk.cpio \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\" \"add 0644 overlay.d/sbin/init-ld.xz init-ld.xz\"                                                                                                                   \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
+                command = $"cpio {RAMDISK} \"add 0750 {INIT} magiskinit\" \"mkdir 0750 overlay.d\" \"mkdir 0750 overlay.d/sbin\" \"add 0644 overlay.d/sbin/magisk.xz magisk.xz\"                                                                           \"{SKIP_APK} add 0644 overlay.d/sbin/stub.xz stub.xz\" \"add 0644 overlay.d/sbin/init-ld.xz init-ld.xz\"                                                                                                                   \"patch\" \"{SKIP_BACKUP} backup ramdisk.cpio.orig\" \"mkdir 000 .backup\" \"add 000 .backup/.magisk config\"";
             }
             else
             {
@@ -320,7 +351,7 @@ namespace MagiskPatcher
             if (CompressRamdisk && ((STATUS & 4) != 0))
             {
                 Info($"Compress ramdisk : Start");
-                if (MagiskBoot($"cpio ramdisk.cpio compress") == 0)
+                if (MagiskBoot($"cpio {RAMDISK} compress") == 0)
                 {
                     Info($"Compress ramdisk : Done");
                 }
