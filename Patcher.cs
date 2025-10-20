@@ -141,7 +141,7 @@ namespace MagiskPatcher
             }
             else
             {
-                Error("Unpack boot : Error: Unable to unpack boot image");
+                Error($"Unpack boot : Error: Unable to unpack boot image({unpackReturnCode})");
             }
             Info("Unpack boot : Done");
             //设置 RECOVERYMODE 标志
@@ -155,9 +155,10 @@ namespace MagiskPatcher
             if (File.Exists($@"{WorkDir}\ramdisk.cpio")) { RAMDISK = "ramdisk.cpio"; }
             if (SupportPatchVendorBoot)
             {
-                if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; return; }
-                if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; return; }
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; goto FindRamdiskDone; }
+                if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; goto FindRamdiskDone; }
             }
+            FindRamdiskDone:
             if (RAMDISK != "") { Info($"Find ramdisk : Done : {RAMDISK}"); } else { Info($"Find ramdisk : Done : No ramdisk found"); }
             //检查ramdisk状态
             Info("Check ramdisk status : Start");
@@ -747,6 +748,7 @@ namespace MagiskPatcher
             SupportPatchVbmetaFlag = bool.Parse(values[optionDict["SupportPatchVbmetaFlag"]]);
             SupportPreInitDevice = bool.Parse(values[optionDict["SupportPreInitDevice"]]);
             SupportLegacySarFlag = bool.Parse(values[optionDict["SupportLegacySarFlag"]]);
+            SupportPatchVendorBoot = bool.Parse(values[optionDict["SupportPatchVendorBoot"]]);
             CheckRamdiskStatus_AllowMissingRamdisk = bool.Parse(values[optionDict["CheckRamdiskStatus_AllowMissingRamdisk"]]);
             AonlySARRamdiskSpecialHandling = bool.Parse(values[optionDict["AonlySARRamdiskSpecialHandling"]]);
             SupportSonyInitReal = bool.Parse(values[optionDict["SupportSonyInitReal"]]);
