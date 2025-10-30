@@ -1,16 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MagiskPatcher
+﻿namespace MagiskPatcher
 {
     public class ArgsParser
     {
-        static string argpart1;
-        static string argpart2;
-        static Dictionary<string, string> argsDictionary = new Dictionary<string, string> { };
+    static string argpart1 = "";
+    static string argpart2 = "";
+        static Dictionary<string, string> argsDictionary = [];
 
         public static Dictionary<string, string> Run(string[] args, bool printResult)
         {
@@ -25,7 +19,7 @@ namespace MagiskPatcher
                 for (int i = 0; i < args.Length; i++)
                 {
                     //如果参数不是以-开头的（必要的参数），例如xxx.exe args1
-                    if (args[i].Substring(0, 1) != "-")
+                    if (args[i][..1] != "-")
                     {
                         argsDictionary.Add($"args{NecessaryArgsIndex}", $"{args[i]}");
                         //Console.WriteLine($"set \"args{NecessaryArgsIndex}={args[i]}\"");
@@ -35,9 +29,9 @@ namespace MagiskPatcher
                     else
                     {
                         //去除-
-                        string argtmp = args[i].Substring(1);
+                        string argtmp = args[i][1..];
                         //格式正确：第一个字符不是-或空格
-                        if (argtmp.Substring(0, 1) != "=" && argtmp.Substring(0, 1) != " ")
+                        if (argtmp[..1] != "=" && argtmp[..1] != " ")
                         {
                             int equalcount = argtmp.Count(c => c == '=');
                             //如果参数中没有等号，例如xxx.exe -noprompt
@@ -75,7 +69,7 @@ namespace MagiskPatcher
                 {
                     foreach (KeyValuePair<string, string> pair in argsDictionary)
                     {
-                        if (pair.Key.Substring(0, 4) == "args")
+                        if (pair.Key[..4] == "args")
                         {
                             Console.WriteLine($"set \"{pair.Key}={pair.Value}\"");
                         }
@@ -89,13 +83,6 @@ namespace MagiskPatcher
             return argsDictionary;
 
         }
-
-
-
-
-
-
-
 
         static void SplitArg(string input)
         {
@@ -112,9 +99,5 @@ namespace MagiskPatcher
             argpart1 = parts[0];
             argpart2 = parts[1];
         }
-
-
-
-
     }
 }

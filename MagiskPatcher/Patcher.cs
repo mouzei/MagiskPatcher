@@ -1,22 +1,38 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
-using static MagiskPatcher.Program;
 using static MagiskPatcher.Tool;
 
 namespace MagiskPatcher
 {
-    public static class Patcher
+    internal static partial class Patcher
     {
+        public static string? MagiskZipPath;
+        public static string? OrigFilePath;
+        public static string? NewFilePath;
+        public static string? WorkDir;
+        public static string? ZipToolPath;
+        public static string? MagiskbootPath;
+        public static string? CsvConfPath;
+        public static bool? InstFullMagsikAPP;
+        public static string? ChkNewFileSize;
+        public static bool? CleanupAfterComplete;
+        public static string? SaveSomeOutputInfoToBat;
+        public static string? CpuType;
+        public static bool? Flag_KEEPVERITY;
+        public static bool? Flag_KEEPFORCEENCRYPT;
+        public static bool? Flag_RECOVERYMODE;
+        public static bool? Flag_PATCHVBMETAFLAG;
+        public static bool? Flag_LEGACYSAR;
+        public static string? Flag_PREINITDEVICE;
+        public static string MagiskVersion => MagiskVer;
+        public static uint OriginalFileSize => OrigFileSize;
+        public static uint PatchedFileSize => NewFileSize;
+
         //版本号
         public static string Version = "2025.10.20-1";
         //csv配置文件涉及的参数
         static string Comment = "";
-        static List<string> RequiredFiles = new List<string> { };
+        static List<string> RequiredFiles = [];
         static bool RecoveryModeSupport = false;
         static bool AutoSetRecoveryModeWhenRecoveryDtboFound = false;
         static bool TwoStageInitSupport = false;
@@ -57,12 +73,12 @@ namespace MagiskPatcher
         static bool PATCHVBMETAFLAG;
         //处理器
         static string CpuArch = "";
-        static Dictionary<string, bool> CpuBitSupport = new Dictionary<string, bool> { };
+        static Dictionary<string, bool> CpuBitSupport = [];
         //面具版本号
         static string MagiskVer = "unknown";
         static string MagiskVerCode = "unknown";
         //程序生成的（需要清理的）文件名
-        static List<string> FilesForCleanup = new List<string> { };
+        static List<string> FilesForCleanup = [];
         //boot文件大小
         static uint OrigFileSize;
         static uint NewFileSize;
@@ -80,15 +96,15 @@ namespace MagiskPatcher
             Info("Prepare Magisk files : Start");
             PrepareMagiskFiles(CpuArch, CpuBitSupport);
             Info("Prepare Magisk files : Done");
-            //设置标志
-            KEEPVERITY = (bool)Flag_KEEPVERITY;
-            KEEPFORCEENCRYPT = (bool)Flag_KEEPFORCEENCRYPT;
-            bool RECOVERYMODE = (bool)Flag_RECOVERYMODE;
-            PATCHVBMETAFLAG = (bool)Flag_PATCHVBMETAFLAG;
+            //设置标志（使用默认值以防止可空类型导致的异常）
+            KEEPVERITY = Flag_KEEPVERITY ?? true;
+            KEEPFORCEENCRYPT = Flag_KEEPFORCEENCRYPT ?? true;
+            bool RECOVERYMODE = Flag_RECOVERYMODE ?? false;
+            PATCHVBMETAFLAG = Flag_PATCHVBMETAFLAG ?? false;
             string PREINITDEVICE = "";
-            if (SupportPreInitDevice) { PREINITDEVICE = Flag_PREINITDEVICE; }
+            if (SupportPreInitDevice) { PREINITDEVICE = Flag_PREINITDEVICE ?? ""; }
             bool LEGACYSAR;
-            if (SupportLegacySarFlag) { LEGACYSAR = (bool)Flag_LEGACYSAR; } else { LEGACYSAR = true; }
+            if (SupportLegacySarFlag) { LEGACYSAR = Flag_LEGACYSAR ?? false; } else { LEGACYSAR = true; }
             bool SYSTEM_ROOT = LEGACYSAR;
             bool TWOSTAGEINIT = false;
             //bool CHROMEOS = false; //暂不支持
@@ -119,29 +135,28 @@ namespace MagiskPatcher
             {
                 if (!File.Exists($@"{WorkDir}\{fileName}")) { Error($"File not exist: {fileName}"); }
             }
-            if (File.Exists(NewFilePath)) { File.Delete(NewFilePath); }
-            if (File.Exists(SaveSomeOutputInfoToBat)) { File.Delete(SaveSomeOutputInfoToBat); }
+            if (!string.IsNullOrEmpty(NewFilePath) && File.Exists(NewFilePath)) { File.Delete(NewFilePath); }
+            if (!string.IsNullOrEmpty(SaveSomeOutputInfoToBat) && File.Exists(SaveSomeOutputInfoToBat)) { File.Delete(SaveSomeOutputInfoToBat); }
             Info("Check files : Done");
             //解包原boot
             Info("Unpack boot : Start");
             int unpackReturnCode = MagiskBoot($"unpack -h \"{OrigFilePath}\"");
-            if (unpackReturnCode == 0)
+            switch (unpackReturnCode)
             {
-                Info("Unpack boot : Info : Normal boot image detected");
-            }
-            else if (unpackReturnCode == 2)
-            {
-                Info("Unpack boot : Info : ChromeOS boot image detected");
-                Error("Unpack boot : Error : ChromeOS is currently not supported");
-            }
-            else if (SupportPatchVendorBoot && unpackReturnCode == 3)
-            {
-                Info("Unpack boot : Info : Vendor boot image detected");
-                VENDORBOOT = true;
-            }
-            else
-            {
-                Error($"Unpack boot : Error: Unable to unpack boot image({unpackReturnCode})");
+                case 0:
+                    Info("Unpack boot : Info : Normal boot image detected");
+                    break;
+                case 2:
+                    Info("Unpack boot : Info : ChromeOS boot image detected");
+                    Error("Unpack boot : Error : ChromeOS is currently not supported");
+                    break;
+                case 3 when SupportPatchVendorBoot:
+                    Info("Unpack boot : Info : Vendor boot image detected");
+                    VENDORBOOT = true;
+                    break;
+                default:
+                    Error($"Unpack boot : Error: Unable to unpack boot image({unpackReturnCode})");
+                    break;
             }
             Info("Unpack boot : Done");
             //设置 RECOVERYMODE 标志
@@ -158,7 +173,7 @@ namespace MagiskPatcher
                 if (File.Exists($@"{WorkDir}\vendor_ramdisk\init_boot.cpio")) { RAMDISK = @"vendor_ramdisk\init_boot.cpio"; goto FindRamdiskDone; }
                 if (File.Exists($@"{WorkDir}\vendor_ramdisk\ramdisk.cpio")) { RAMDISK = @"vendor_ramdisk\ramdisk.cpio"; goto FindRamdiskDone; }
             }
-            FindRamdiskDone:
+        FindRamdiskDone:
             if (RAMDISK != "") { Info($"Find ramdisk : Done : {RAMDISK}"); } else { Info($"Find ramdisk : Done : No ramdisk found"); }
             //检查ramdisk状态
             Info("Check ramdisk status : Start");
@@ -181,17 +196,17 @@ namespace MagiskPatcher
                     Error("Check ramdisk status : Error : No ramdisk found");
                 }
             }
-            if (STATUS == 0)
+            switch (STATUS)
             {
-                Info("Check ramdisk status : Done: Stock boot image detected");
-            }
-            else if (STATUS == 1)
-            {
-                Info("Check ramdisk status : Done: Magisk patched boot image detected");
-            }
-            else
-            {
-                Error("Check ramdisk status : Error: Boot image patched by unsupported programs. Please restore back to stock boot image");
+                case 0:
+                    Info("Check ramdisk status : Done: Stock boot image detected");
+                    break;
+                case 1:
+                    Info("Check ramdisk status : Done: Magisk patched boot image detected");
+                    break;
+                default:
+                    Error("Check ramdisk status : Error: Boot image patched by unsupported programs. Please restore back to stock boot image");
+                    break;
             }
             //计算SHA1
             Info($"Get stock boot sha1 : Start");
@@ -200,7 +215,7 @@ namespace MagiskPatcher
             {
                 Info("Get stock boot sha1 : Info : From stock boot");
                 MagiskBoot($"sha1 \"{OrigFilePath}\"");
-                SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1);
+                SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1) ?? "";
             }
             if (STATUS == 1)
             {
@@ -218,7 +233,7 @@ namespace MagiskPatcher
                 {
                     Info($"Get stock boot sha1 : Info : From {RAMDISK}");
                     MagiskBoot($@"cpio {RAMDISK} sha1");
-                    SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1);
+                    SHA1 = Tool.GetLineFromString(Tool.RemoveEmptyLines(CmdOutput), 1) ?? "";
                 }
             }
             Info($"Get stock boot sha1 : Done : {SHA1}");
@@ -247,10 +262,10 @@ namespace MagiskPatcher
                 }
             }
             //备份ramdisk
-            if (File.Exists($@"{WorkDir}\{RAMDISK}"))
+            if (File.Exists($@"{WorkDir!}\{RAMDISK}"))
             {
                 Info("Backup ramdisk : Start");
-                File.Copy($@"{WorkDir}\{RAMDISK}", $@"{WorkDir}\ramdisk.cpio.orig", overwrite: true);
+                File.Copy($@"{WorkDir!}\{RAMDISK}", $@"{WorkDir!}\ramdisk.cpio.orig", overwrite: true);
                 FilesForCleanup.AddRange(new string[] { "ramdisk.cpio.orig" });
                 Info("Backup ramdisk : Done");
             }
@@ -266,7 +281,7 @@ namespace MagiskPatcher
                 {
                     Info($"Aonly SAR ramdisk special handling : Info : A only system-as-root. Delete {RAMDISK} and ramdisk.cpio.orig");
                     File.Delete($@"{WorkDir}\{RAMDISK}");
-                    File.Delete($@"{WorkDir}\ramdisk.cpio.orig");
+                    File.Delete($@"{WorkDir!}\ramdisk.cpio.orig");
                 }
                 Info("Aonly SAR ramdisk special handling : Done");
             }
@@ -295,7 +310,8 @@ namespace MagiskPatcher
             if (SupportPreInitDevice && PREINITDEVICE != "" && PREINITDEVICE != null) { configText += $"PREINITDEVICE={PREINITDEVICE.ToString()}\n"; }
             if (SHA1 != "" && SHA1 != null) { configText += $"SHA1={SHA1.ToString().ToLower()}\n"; }
             if (AddRandomSeedToConfig) { configText += $"RANDOMSEED=0x{Tool.GenerateRandomString("abcdef0123456789", 16)}\n"; }
-            Console.WriteLine(configText);
+            // library should not write to console directly; let host log it
+            MagiskPatcherCore.Logger?.Debug(configText);
             WriteToFile($@"{WorkDir}\config", configText, false, false, new UTF8Encoding(false));
             FilesForCleanup.AddRange(new string[] { "config" });
             Info("Write config : Done");
@@ -507,13 +523,13 @@ namespace MagiskPatcher
             }
             //打包boot
             Info($"Repack boot : Start");
-            if (MagiskBoot($"repack \"{OrigFilePath}\" \"{NewFilePath}\"") != 0)
+            if (MagiskBoot($"repack \"{OrigFilePath!}\" \"{NewFilePath!}\"") != 0)
             {
                 Error("Repack boot : Error : Unable to repack boot image");
             }
             Info($"Repack boot : Done");
             //检查boot大小
-            NewFileSize = (uint)new FileInfo(NewFilePath).Length;
+            NewFileSize = (uint)new FileInfo(NewFilePath!).Length;
             Info($"[NewFileSize]{NewFileSize}");
             if (!String.IsNullOrEmpty(ChkNewFileSize))
             {
@@ -525,10 +541,10 @@ namespace MagiskPatcher
             PrintDone();
             Info($"New boot : {NewFilePath}");
             //保存一些输出信息到bat
-            if (SaveSomeOutputInfoToBat != "")
+            if (!string.IsNullOrEmpty(SaveSomeOutputInfoToBat))
             {
                 Info($"Save some output info to bat : {SaveSomeOutputInfoToBat}");
-                WriteToFile(SaveSomeOutputInfoToBat, $"" +
+                WriteToFile(SaveSomeOutputInfoToBat!, $"" +
                     $"set \"MagiskPatcher_MagiskVer={MagiskVer}\"\r\n" +
                     $"set \"MagiskPatcher_MagiskVerCode={MagiskVerCode}\"\r\n" +
                     $"set \"MagiskPatcher_OrigFilePath={OrigFilePath}\"\r\n" +
@@ -547,12 +563,12 @@ namespace MagiskPatcher
         static void ArgsParser()
         {
             //面具zip路径【必需】
-            if (!File.Exists(MagiskZipPath)) { Error($"File not found : {MagiskZipPath}"); }
-            MagiskZipPath = Path.GetFullPath(MagiskZipPath);
+            if (string.IsNullOrEmpty(MagiskZipPath) || !File.Exists(MagiskZipPath)) { Error($"File not found : {MagiskZipPath}"); }
+            MagiskZipPath = Path.GetFullPath(MagiskZipPath!);
             Info($"[MagiskZipPath]{MagiskZipPath}");
             //原文件路径【必需】
-            if (!File.Exists(OrigFilePath)) { Error($"File not found : {OrigFilePath}"); }
-            OrigFilePath = Path.GetFullPath(OrigFilePath);
+            if (string.IsNullOrEmpty(OrigFilePath) || !File.Exists(OrigFilePath)) { Error($"File not found : {OrigFilePath}"); }
+            OrigFilePath = Path.GetFullPath(OrigFilePath!);
             Info($"[OrigFilePath]{OrigFilePath}");
             //原文件大小
             OrigFileSize = (uint)new FileInfo(OrigFilePath).Length;
@@ -564,24 +580,24 @@ namespace MagiskPatcher
             }
             else
             {
-                WorkDir = Path.GetFullPath(WorkDir);
+                WorkDir = Path.GetFullPath(WorkDir!);
                 if (WorkDir.EndsWith("\\")) { WorkDir = WorkDir.TrimEnd('\\'); }
                 if (!Directory.Exists(WorkDir)) { Error($"Directory not found : {WorkDir}"); }
             }
             Info($"[WorkDir]{WorkDir}");
             //7z路径
             if (string.IsNullOrEmpty(ZipToolPath)) { ZipToolPath = "7z.exe"; }
-            ZipToolPath = Path.GetFullPath(ZipToolPath);
+            ZipToolPath = Path.GetFullPath(ZipToolPath!);
             if (!File.Exists(ZipToolPath)) { Error($"File not found : {ZipToolPath}"); }
             Info($"[ZipToolPath]{ZipToolPath}");
             //magiskboot路径
             if (string.IsNullOrEmpty(MagiskbootPath)) { MagiskbootPath = "magiskboot.exe"; }
-            MagiskbootPath = Path.GetFullPath(MagiskbootPath);
+            MagiskbootPath = Path.GetFullPath(MagiskbootPath!);
             if (!File.Exists(MagiskbootPath)) { Error($"File not found : {MagiskbootPath}"); }
             Info($"[MagiskbootPath]{MagiskbootPath}");
             //CSV路径
             if (string.IsNullOrEmpty(CsvConfPath)) { CsvConfPath = "MagiskPatcher.csv"; }
-            CsvConfPath = Path.GetFullPath(CsvConfPath);
+            CsvConfPath = Path.GetFullPath(CsvConfPath!);
             if (!File.Exists(CsvConfPath)) { Error($"File not found : {CsvConfPath}"); }
             Info($"[CsvConfPath]{CsvConfPath}");
             //开机时安装完整MagiskAPP
@@ -642,11 +658,11 @@ namespace MagiskPatcher
             }
             Info($"[CpuType]{CpuType}");
             //修补选项
-            if (Flag_KEEPVERITY == null)       { Flag_KEEPVERITY = true; }
+            if (Flag_KEEPVERITY == null) { Flag_KEEPVERITY = true; }
             if (Flag_KEEPFORCEENCRYPT == null) { Flag_KEEPFORCEENCRYPT = true; }
-            if (Flag_RECOVERYMODE == null)     { Flag_RECOVERYMODE = false; }
-            if (Flag_PATCHVBMETAFLAG == null)  { Flag_PATCHVBMETAFLAG = false; }
-            if (Flag_LEGACYSAR == null)        { Flag_LEGACYSAR = false; }
+            if (Flag_RECOVERYMODE == null) { Flag_RECOVERYMODE = false; }
+            if (Flag_PATCHVBMETAFLAG == null) { Flag_PATCHVBMETAFLAG = false; }
+            if (Flag_LEGACYSAR == null) { Flag_LEGACYSAR = false; }
             Info($"[Flag_KEEPVERITY]{Flag_KEEPVERITY}");
             Info($"[Flag_KEEPFORCEENCRYPT]{Flag_KEEPFORCEENCRYPT}");
             Info($"[Flag_RECOVERYMODE]{Flag_RECOVERYMODE}");
@@ -723,7 +739,7 @@ namespace MagiskPatcher
             char[] separators = { ',', '[', ']' };
             string[] options = optionLine.Split(separators, StringSplitOptions.RemoveEmptyEntries);
             //创建字典，绑定索引和值
-            Dictionary<string, int> optionDict = new Dictionary<string, int>();
+            Dictionary<string, int> optionDict = [];
             for (int i = 0; i < options.Length; i++)
             {
                 optionDict.Add(options[i], i);
@@ -800,8 +816,8 @@ namespace MagiskPatcher
             {
                 environmentVars.Add("PATCHVBMETAFLAG", PATCHVBMETAFLAG.ToString().ToLower());
             }
-            int exitCode = RunCommand(WorkDir, MagiskbootPath, arguments, environmentVars);
-            Console.WriteLine(CmdOutput);
+            int exitCode = RunCommand(WorkDir!, MagiskbootPath!, arguments, environmentVars);
+            MagiskPatcherCore.Logger?.Debug(CmdOutput);
             return exitCode;
         }
 
@@ -809,8 +825,8 @@ namespace MagiskPatcher
         //调用7z
         static int ZipTool(string arguments)
         {
-            int exitCode = RunCommand(WorkDir, ZipToolPath, arguments);
-            Console.WriteLine(CmdOutput);
+            int exitCode = RunCommand(WorkDir!, ZipToolPath!, arguments);
+            MagiskPatcherCore.Logger?.Debug(CmdOutput);
             return exitCode;
         }
 
@@ -870,8 +886,8 @@ namespace MagiskPatcher
             }
             if (RequiredFiles.Contains("stub.xz"))
             {
-                if (InstFullMagsikAPP == true) { File.Copy(MagiskZipPath, $@"{WorkDir}\stub.apk", true); }
-                if (File.Exists($@"{WorkDir}\stub.apk")) { MagiskBoot($@"compress=xz stub.apk stub.xz"); }
+                if (InstFullMagsikAPP == true) { File.Copy(MagiskZipPath!, $@"{WorkDir!}\stub.apk", true); }
+                if (File.Exists($@"{WorkDir!}\stub.apk")) { MagiskBoot($@"compress=xz stub.apk stub.xz"); }
             }
             if (File.Exists($@"{WorkDir}\libinit-ld.so"))
             {
@@ -889,7 +905,7 @@ namespace MagiskPatcher
                 MagiskBoot($@"compress=xz util_functions.sh util_functions.xz");
                 FilesForCleanup.AddRange(new string[] { "util_functions.sh", "util_functions.xz" });
             }
-            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz", "libbusybox.so", "libmagiskboot.so", "magiskboot"});
+            FilesForCleanup.AddRange(new string[] { "libmagiskinit.so", "libmagisk.so", "magisk.xz", "libmagisk32.so", "magisk32.xz", "libmagisk64.so", "magisk64.xz", "magiskinit", "magiskinit64", "libinit-ld.so", "init-ld.xz", "stub.apk", "stub.xz", "libbusybox.so", "libmagiskboot.so", "magiskboot" });
         }
 
 
@@ -912,7 +928,7 @@ namespace MagiskPatcher
                         string processed = lines[i];
 
                         // 移除所有androidboot.selinux=...模式
-                        processed = Regex.Replace(processed, @"androidboot\.selinux=[^ ]*", "");
+                        processed = MyRegex().Replace(processed, "");
 
                         // 将多个空格替换为单个空格
                         processed = Regex.Replace(processed, @" +", " ");
@@ -932,18 +948,18 @@ namespace MagiskPatcher
                 {
                     // 写回文件
                     File.WriteAllLines(filePath, lines);
-                    Console.WriteLine("+ Successfully set SELinux to permissive");
+                    MagiskPatcherCore.Logger?.Info("+ Successfully set SELinux to permissive");
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine("- No line starting with 'cmdline=' was found");
+                    MagiskPatcherCore.Logger?.Warn("- No line starting with 'cmdline=' was found");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"- Failed to set SELinux to permissive: {ex.Message}");
+                MagiskPatcherCore.Logger?.Warn($"- Failed to set SELinux to permissive: {ex.Message}");
                 return false;
             }
         }
@@ -952,44 +968,41 @@ namespace MagiskPatcher
         //打印完成信息
         private static void PrintDone()
         {
-            Console.WriteLine($@"");
-            Console.WriteLine($@"  /######  /## /##                      ");
-            Console.WriteLine($@" /##__  ##| ##| ##                      ");
-            Console.WriteLine($@"| ##  \ ##| ##| ##                      ");
-            Console.WriteLine($@"| ########| ##| ##    Magisk Patcher    ");
-            Console.WriteLine($@"| ##__  ##| ##| ##    {Version}");
-            Console.WriteLine($@"| ##  | ##| ##| ##                      ");
-            Console.WriteLine($@"| ##  | ##| ##| ##    酷安@某贼         ");
-            Console.WriteLine($@"|__/  |__/|__/|__/    xda@SYXZ          ");
-            Console.WriteLine($@"");
-            Console.WriteLine($@"       /##                              ");
-            Console.WriteLine($@"      | ##                              ");
-            Console.WriteLine($@"  /#######  /######  /#######   /###### ");
-            Console.WriteLine($@" /##__  ## /##__  ##| ##__  ## /##__  ##");
-            Console.WriteLine($@"| ##  | ##| ##  \ ##| ##  \ ##| ########");
-            Console.WriteLine($@"| ##  | ##| ##  | ##| ##  | ##| ##_____/");
-            Console.WriteLine($@"|  #######|  ######/| ##  | ##|  #######");
-            Console.WriteLine($@" \_______/ \______/ |__/  |__/ \_______/");
-            Console.WriteLine($@"");
+            var ascii = $@"
+  /######  /## /##                      
+ /##__  ##| ##| ##                      
+| ##  \ ##| ##| ##                      
+| ########| ##| ##    Magisk Patcher    
+| ##__  ##| ##| ##    {Version}
+| ##  | ##| ##| ##                      
+| ##  | ##| ##| ##    酷安@某贼         
+|__/  |__/|__/|__/    xda@SYXZ          
+
+       /##                              
+      | ##                              
+  /#######  /######  /#######   /###### 
+ /##__  ## /##__  ##| ##__  ## /##__  ##
+| ##  | ##| ##  \ ##| ##  \ ##| ########
+| ##  | ##| ##  | ##| ##  | ##| ##_____/
+|  #######|  ######/| ##  | ##|  #######
+ \_______/ \______/ |__/  |__/ \_______/
+";
+            MagiskPatcherCore.Logger?.Info(ascii);
         }
 
 
         private static void Error(string info)
         {
-            Console.WriteLine($"[Error]{info}");
-            Environment.Exit(1);
+            var message = $"[Error]{info}";
+            MagiskPatcherCore.Logger?.Error(message);
+            throw new InvalidOperationException(message);
         }
         private static void Info(string info)
         {
-            Console.WriteLine($"[Info]{info}");
+            MagiskPatcherCore.Logger?.Info($"[Info]{info}");
         }
 
-
-
-
-
-
-
-
+        [GeneratedRegex(@"androidboot\.selinux=[^ ]*")]
+        private static partial Regex MyRegex();
     }
 }

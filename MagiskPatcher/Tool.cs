@@ -1,25 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using static MagiskPatcher.Program;
 
 namespace MagiskPatcher
 {
-    public static class Tool
+    internal static class Tool
     {
         public static string CmdOutput = "";
-
-
-
-
-
-
-
-
 
         /// <summary>
         /// 检查文件中是否存在指定的十六进制序列
@@ -30,10 +17,8 @@ namespace MagiskPatcher
         /// <returns>是否存在匹配的序列</returns>
         public static bool ContainsHexPattern(string filePath, string hexPattern, bool caseSensitive = false)
         {
-            // 将十六进制字符串转换为字节数组
             byte[] patternBytes = HexStringToByteArray(hexPattern);
 
-            // 读取文件并搜索
             byte[] fileBytes = File.ReadAllBytes(filePath);
 
             return ContainsByteSequence(fileBytes, patternBytes);
@@ -83,30 +68,24 @@ namespace MagiskPatcher
         {
             if (string.IsNullOrEmpty(allText))
             {
-                Console.WriteLine("输入字符串不能为空");
+                MagiskPatcherCore.Logger?.Warn("输入字符串不能为空");
                 return "";
-                //throw new ArgumentException("输入字符串不能为空");
             }
 
-            // 查找包含"SHA1="的行
             var targetLine = allText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None)
                                .FirstOrDefault(line => line.Contains(strInTargetLine));
 
             if (targetLine == null)
             {
-                Console.WriteLine($"未找到包含'{strInTargetLine}'的行");
+                MagiskPatcherCore.Logger?.Warn($"未找到包含'{strInTargetLine}'的行");
                 return "";
-                //throw new InvalidOperationException("未找到包含'SHA1='的行");
             }
-
-            // 以'='为分隔符分割字符串
             var segments = targetLine.Split(delim);
 
             if (segments.Length < token)
             {
-                Console.WriteLine($"分割后的段数不足{token}段，实际只有{segments.Length}段");
+                MagiskPatcherCore.Logger?.Warn($"分割后的段数不足{token}段，实际只有{segments.Length}段");
                 return "";
-                //throw new InvalidOperationException($"分割后的段数不足666段，实际只有{segments.Length}段");
             }
 
             return segments[token - 1]; // 数组是0-based索引，所以第666个元素索引是665
@@ -125,21 +104,14 @@ namespace MagiskPatcher
                 throw new ArgumentException("长度必须大于0", nameof(length));
             }
 
-            // 使用加密安全的随机数生成器
             using (var rng = RandomNumberGenerator.Create())
             {
-                // 将字符池转换为字符数组
                 var chars = characterPool.ToCharArray();
-
-                // 生成随机字节
                 var bytes = new byte[length];
                 rng.GetBytes(bytes);
-
-                // 将字节映射到字符池中的字符
                 var result = new char[length];
                 for (int i = 0; i < length; i++)
                 {
-                    // 使用模运算确保索引在字符池范围内
                     result[i] = chars[bytes[i] % chars.Length];
                 }
 
@@ -157,7 +129,7 @@ namespace MagiskPatcher
         /// <param name="useCrLf">true表示使用CRLF换行符(\r\n)，false表示使用LF换行符(\n)</param>
         /// <param name="encoding">编码格式，默认为UTF-8</param>
         /// <returns>是否写入成功</returns>
-        public static bool WriteToFile(string filePath, string text, bool append, bool useCrLf = true, Encoding encoding = null)
+    public static bool WriteToFile(string filePath, string text, bool append, bool useCrLf = true, Encoding? encoding = null)
         {
             try
             {
@@ -184,8 +156,8 @@ namespace MagiskPatcher
             }
             catch (Exception ex)
             {
-                // 在实际应用中，你可能想记录这个错误或抛出自定义异常
-                Console.WriteLine($"写入文件时出错: {ex.Message}");
+                // 在实际应用中，记录该错误到 host 提供的 logger
+                MagiskPatcherCore.Logger?.Error($"写入文件时出错: {ex.Message}");
                 return false;
             }
         }
@@ -197,7 +169,7 @@ namespace MagiskPatcher
         /// <param name="input">输入字符串</param>
         /// <param name="lineNumber">要获取的行号(从1开始)</param>
         /// <returns>指定行的内容，如果行号无效则返回null</returns>
-        public static string GetLineFromString(string input, int lineNumber)
+    public static string? GetLineFromString(string input, int lineNumber)
         {
             // 检查参数有效性
             if (string.IsNullOrEmpty(input) || lineNumber < 1)
@@ -207,7 +179,7 @@ namespace MagiskPatcher
 
             using (var reader = new StringReader(input))
             {
-                string line;
+                string? line;
                 int currentLine = 1;
 
                 while ((line = reader.ReadLine()) != null)
@@ -231,11 +203,11 @@ namespace MagiskPatcher
         /// <param name="input">原始字符串</param>
         /// <param name="preserveLineEndings">是否保留原始换行符风格（true则使用原始换行符，false则使用当前环境的换行符）</param>
         /// <returns>移除空行后的字符串</returns>
-        public static string RemoveEmptyLines(this string input, bool preserveLineEndings = false)
+        public static string RemoveEmptyLines(this string? input, bool preserveLineEndings = false)
         {
             if (string.IsNullOrEmpty(input))
             {
-                return input;
+                return string.Empty;
             }
 
             // 分割字符串，考虑两种换行符
@@ -254,7 +226,7 @@ namespace MagiskPatcher
         }
 
 
-        public static int RunCommand(string workingDirectory, string filePath, string arguments, Dictionary<string, string> environmentVars = null)
+    public static int RunCommand(string workingDirectory, string filePath, string arguments, Dictionary<string, string>? environmentVars = null)
         {
             string standardOutput;
             string standardError;
@@ -279,14 +251,14 @@ namespace MagiskPatcher
                     CreateNoWindow = true
                 }
             };
-            if (environmentVars != null)
-            {
-                foreach (var pair in environmentVars)
+                if (environmentVars != null)
                 {
-                    process.StartInfo.EnvironmentVariables[pair.Key] = pair.Value;
-                    //Console.WriteLine($"设置环境变量: {pair.Key} = {pair.Value}");
+                    foreach (var pair in environmentVars)
+                    {
+                        process.StartInfo.EnvironmentVariables[pair.Key] = pair.Value;
+                        // host may log env changes if it wants
+                    }
                 }
-            }
 
             process.OutputDataReceived += (sender, args) =>
             {
@@ -310,9 +282,9 @@ namespace MagiskPatcher
                 standardOutput = outputBuilder.ToString().TrimEnd();
                 standardError = errorBuilder.ToString().TrimEnd();
 
-                //Console.WriteLine($"Standard Output: \r\n{standardOutput}");
-                //Console.WriteLine($"Standard Error: \r\n{standardError}");
+                // Pass command outputs to host logger (debug) instead of Console
                 CmdOutput = standardOutput + "\r\n" + standardError;
+                MagiskPatcherCore.Logger?.Debug(CmdOutput);
 
                 return process.ExitCode;
             }

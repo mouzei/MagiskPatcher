@@ -1,3 +1,6 @@
 <Solution>
-  <Project Path="MagiskPatcher.csproj" Id="ac7b79d9-6eab-45b4-a314-0e47fdea4e38" />
+  <Project Path="Command-line/Command-line.csproj" Id="80bc2da9-bb75-43c9-9a30-49c7ef9e06d0">
+    <BuildDependency Project="MagiskPatcher/MagiskPatcher.csproj" />
+  </Project>
+  <Project Path="MagiskPatcher/MagiskPatcher.csproj" Id="9619c7ff-7eea-453c-aaf8-856f8396246d" />
 </Solution>
