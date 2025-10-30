@@ -596,7 +596,20 @@ namespace MagiskPatcher
             if (!File.Exists(MagiskbootPath)) { Error($"File not found : {MagiskbootPath}"); }
             Info($"[MagiskbootPath]{MagiskbootPath}");
             //CSV路径
-            if (string.IsNullOrEmpty(CsvConfPath)) { CsvConfPath = "MagiskPatcher.csv"; }
+            if (string.IsNullOrEmpty(CsvConfPath))
+            {
+                // 优先查找可执行文件同级目录的配置文件
+                var exePath = Path.Combine(AppContext.BaseDirectory, "MagiskPatcher.csv");
+                if (File.Exists(exePath))
+                {
+                    CsvConfPath = exePath;
+                }
+                else
+                {
+                    // 回退到当前工作目录
+                    CsvConfPath = Path.Combine(Environment.CurrentDirectory, "MagiskPatcher.csv");
+                }
+            }
             CsvConfPath = Path.GetFullPath(CsvConfPath!);
             if (!File.Exists(CsvConfPath)) { Error($"File not found : {CsvConfPath}"); }
             Info($"[CsvConfPath]{CsvConfPath}");
