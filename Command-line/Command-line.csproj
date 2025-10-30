@@ -14,4 +14,11 @@
     <ProjectReference Include="..\MagiskPatcher\MagiskPatcher.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\MagiskPatcher\dependencies\**\*">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
