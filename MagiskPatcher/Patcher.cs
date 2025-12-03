@@ -29,7 +29,7 @@ namespace MagiskPatcher
         public static uint PatchedFileSize => NewFileSize;
 
         //版本号
-        public static string Version = "2025.10.20-1";
+        public static string Version = "2025.12.3-1";
         //csv配置文件涉及的参数
         static string Comment = "";
         static List<string> RequiredFiles = [];
